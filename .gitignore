@@ -10,7 +10,7 @@ build/
 .ipynb_checkpoints/
 
 # Generated HTML
-/*.html
+*.html
 
 # Testing
 .pytest_cache/
