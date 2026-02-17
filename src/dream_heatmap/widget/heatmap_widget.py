@@ -1,0 +1,280 @@
+"""HeatmapWidget: anywidget bridge for Jupyter rendering."""
+
+from __future__ import annotations
+
+import pathlib
+
+import anywidget
+import traitlets
+
+from ..core.matrix import MatrixData
+from ..core.color_scale import ColorScale
+from ..core.id_mapper import IDMapper
+from ..layout.composer import LayoutSpec
+from .serializers import (
+    serialize_matrix,
+    serialize_color_lut,
+    serialize_layout,
+    serialize_id_mappers,
+    serialize_config,
+)
+from .selection import SelectionState
+
+_JS_DIR = pathlib.Path(__file__).parent.parent / "js"
+
+
+class HeatmapWidget(anywidget.AnyWidget):
+    """Jupyter widget for rendering interactive heatmaps.
+
+    Communicates with JS via traitlets:
+    - matrix_bytes: row-major float64 matrix data
+    - color_lut: 1024-byte RGBA lookup table
+    - layout_json: JSON layout specification
+    - id_mappers_json: JSON IDMapper data for row/col
+    - config_json: rendering config (vmin, vmax, nanColor)
+    - selection_json: JS→Python selection updates
+    """
+
+    _esm = traitlets.Unicode("").tag(sync=True)
+    _css = traitlets.Unicode("").tag(sync=True)
+
+    @staticmethod
+    def _build_css() -> str:
+        """Build CSS styles for the widget."""
+        return """
+.dh-container {
+  position: relative;
+  display: inline-block;
+  font-family: "Open Sans", verdana, arial, sans-serif;
+}
+.dh-tooltip {
+  position: absolute;
+  display: none;
+  background: #fff;
+  color: #333;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: "Open Sans", verdana, arial, sans-serif;
+  pointer-events: none;
+  z-index: 100;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  border: 1px solid #e0e0e0;
+  line-height: 1.6;
+}
+.dh-tooltip .dh-tip-label {
+  color: #888;
+  font-size: 10px;
+}
+.dh-tooltip .dh-tip-value {
+  font-weight: normal;
+}
+.dh-tooltip .dh-tip-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid #ccc;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.dh-toolbar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 200;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.dh-container:hover .dh-toolbar {
+  opacity: 1;
+}
+.dh-toolbar button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 3px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dh-toolbar button:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+.dh-toolbar button.active {
+  background: #e3edf7;
+  color: #1f77b4;
+}
+.dh-toolbar button svg {
+  width: 16px;
+  height: 16px;
+}
+.dh-show-all-labels .dh-label-auto-hidden {
+  display: inline !important;
+}
+"""
+
+    # Python → JS data
+    matrix_bytes = traitlets.Bytes(b"").tag(sync=True)
+    color_lut = traitlets.Bytes(b"").tag(sync=True)
+    layout_json = traitlets.Unicode("{}").tag(sync=True)
+    id_mappers_json = traitlets.Unicode("{}").tag(sync=True)
+    config_json = traitlets.Unicode("{}").tag(sync=True)
+
+    # JS → Python selection
+    selection_json = traitlets.Unicode("{}").tag(sync=True)
+
+    # JS → Python zoom range
+    zoom_range_json = traitlets.Unicode("null").tag(sync=True)
+
+    def __init__(
+        self,
+        matrix: MatrixData,
+        color_scale: ColorScale,
+        row_mapper: IDMapper,
+        col_mapper: IDMapper,
+        layout: LayoutSpec,
+        selection_state: SelectionState,
+        dendrograms: dict | None = None,
+        annotations: dict | None = None,
+        labels: dict | None = None,
+        legends: list[dict] | None = None,
+        color_bar_title: str | None = None,
+        **kwargs,
+    ) -> None:
+        # Read JS source
+        js_source = self._build_esm()
+
+        # Build config with optional extra data
+        config_extra = {}
+        if dendrograms is not None:
+            config_extra["dendrograms"] = dendrograms
+        if annotations is not None:
+            config_extra["annotations"] = annotations
+        if labels is not None:
+            config_extra["labels"] = labels
+        if legends is not None:
+            config_extra["legends"] = legends
+        if color_bar_title is not None:
+            config_extra["colorBarTitle"] = color_bar_title
+
+        super().__init__(
+            _esm=js_source,
+            _css=self._build_css(),
+            matrix_bytes=serialize_matrix(matrix),
+            color_lut=serialize_color_lut(color_scale),
+            layout_json=serialize_layout(layout),
+            id_mappers_json=serialize_id_mappers(row_mapper, col_mapper),
+            config_json=serialize_config(
+                vmin=color_scale.vmin,
+                vmax=color_scale.vmax,
+                nan_color=color_scale.nan_color,
+                cmap_name=color_scale.cmap_name,
+                **config_extra,
+            ),
+            **kwargs,
+        )
+
+        self._selection_state = selection_state
+        self._row_mapper = row_mapper
+        self._col_mapper = col_mapper
+        self._zoom_callback = None
+        self.observe(self._on_selection_change, names=["selection_json"])
+        self.observe(self._on_zoom_change, names=["zoom_range_json"])
+
+    def _build_esm(self) -> str:
+        """Read and bundle JS source files into a single ESM string."""
+        js_files = [
+            _JS_DIR / "bridge" / "binary_decoder.js",
+            _JS_DIR / "bridge" / "model_sync.js",
+            _JS_DIR / "renderer" / "color_mapper.js",
+            _JS_DIR / "renderer" / "canvas_renderer.js",
+            _JS_DIR / "renderer" / "svg_overlay.js",
+            _JS_DIR / "renderer" / "color_bar.js",
+            _JS_DIR / "renderer" / "legend_renderer.js",
+            _JS_DIR / "layout" / "id_resolver.js",
+            _JS_DIR / "layout" / "viewport.js",
+            _JS_DIR / "interaction" / "hover_handler.js",
+            _JS_DIR / "interaction" / "selection_handler.js",
+            _JS_DIR / "interaction" / "dendrogram_click.js",
+            _JS_DIR / "interaction" / "zoom_handler.js",
+            _JS_DIR / "interaction" / "toolbar.js",
+            _JS_DIR / "index.js",
+        ]
+        parts = []
+        for f in js_files:
+            if f.exists():
+                parts.append(f"// === {f.name} ===\n{f.read_text(encoding='utf-8')}")
+        return "\n\n".join(parts)
+
+    def _on_selection_change(self, change: dict) -> None:
+        """Handle selection updates from JS."""
+        import json
+
+        data = json.loads(change["new"])
+        row_ids = data.get("row_ids", [])
+        col_ids = data.get("col_ids", [])
+        self._selection_state.update(row_ids, col_ids)
+
+    def _on_zoom_change(self, change: dict) -> None:
+        """Handle zoom range updates from JS."""
+        import json
+
+        data = json.loads(change["new"])
+        if self._zoom_callback is not None:
+            self._zoom_callback(data)
+
+    def set_zoom_callback(self, callback) -> None:
+        """Register a callback for zoom events: fn(zoom_range_dict_or_none)."""
+        self._zoom_callback = callback
+
+    def update_data(
+        self,
+        matrix: MatrixData,
+        color_scale: ColorScale,
+        row_mapper: IDMapper,
+        col_mapper: IDMapper,
+        layout: LayoutSpec,
+        dendrograms: dict | None = None,
+        annotations: dict | None = None,
+        labels: dict | None = None,
+        legends: list[dict] | None = None,
+        color_bar_title: str | None = None,
+    ) -> None:
+        """Push updated data to JS (e.g., after zoom or reorder)."""
+        config_extra = {}
+        if dendrograms is not None:
+            config_extra["dendrograms"] = dendrograms
+        if annotations is not None:
+            config_extra["annotations"] = annotations
+        if labels is not None:
+            config_extra["labels"] = labels
+        if legends is not None:
+            config_extra["legends"] = legends
+        if color_bar_title is not None:
+            config_extra["colorBarTitle"] = color_bar_title
+
+        self.matrix_bytes = serialize_matrix(matrix)
+        self.color_lut = serialize_color_lut(color_scale)
+        self.layout_json = serialize_layout(layout)
+        self.id_mappers_json = serialize_id_mappers(row_mapper, col_mapper)
+        self.config_json = serialize_config(
+            vmin=color_scale.vmin,
+            vmax=color_scale.vmax,
+            nan_color=color_scale.nan_color,
+            cmap_name=color_scale.cmap_name,
+            **config_extra,
+        )
+        self._row_mapper = row_mapper
+        self._col_mapper = col_mapper

@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated HTML
+/*.html
+
+# Testing
+.pytest_cache/
+
+# Windows artifacts
+nul
+
+# Claude session data
+.claude/
+
+# Local planning
+init_claude_plan.ini
