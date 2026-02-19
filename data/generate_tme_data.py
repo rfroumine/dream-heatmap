@@ -369,10 +369,31 @@ def generate():
         "tissue_region": tissue_regions,
     })
 
+    # Marker category and group assignments
+    marker_category_map = {
+        "HER2": "Tumor", "CK": "Tumor", "Ki67": "Functional", "EGFR": "Tumor",
+        "E-cadherin": "Tumor", "p53": "Functional",
+        "CD45": "Immune", "CD8": "Immune", "CD4": "Immune", "FOXP3": "Immune",
+        "CD20": "Immune", "CD56": "Immune", "CD68": "Immune", "CD11c": "Immune",
+        "PD-L1": "Functional", "PD-1": "Functional",
+        "SMA": "Stromal", "Vimentin": "Stromal", "Collagen": "Stromal", "CD31": "Stromal",
+    }
+    marker_group_map = {
+        "HER2": "HER2/EGFR", "CK": "Epithelial", "Ki67": "Proliferation", "EGFR": "HER2/EGFR",
+        "E-cadherin": "Epithelial", "p53": "Proliferation",
+        "CD45": "Pan-immune", "CD8": "T cell", "CD4": "T cell", "FOXP3": "T cell",
+        "CD20": "B cell", "CD56": "NK cell", "CD68": "Myeloid", "CD11c": "Myeloid",
+        "PD-L1": "Checkpoint", "PD-1": "Checkpoint",
+        "SMA": "Structural", "Vimentin": "Structural", "Collagen": "Structural", "CD31": "Vascular",
+    }
+
     # Marker metadata
     marker_meta_df = pd.DataFrame({
         "marker": MARKERS,
         "positivity_cutoff": [CUTOFFS[m] for m in MARKERS],
+        "marker_category": [marker_category_map[m] for m in MARKERS],
+        "marker_group": [marker_group_map[m] for m in MARKERS],
+        "channel_number": list(range(1, len(MARKERS) + 1)),
     })
 
     # Write CSVs

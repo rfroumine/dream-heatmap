@@ -13,6 +13,7 @@ import pandas as pd
 from ..api import Heatmap
 from ..annotation.categorical import CategoricalAnnotation
 from ..annotation.minigraph import BarChartAnnotation
+from ..layout.annotation_layout import AnnotationLayoutEngine
 
 
 class DashboardState(param.Parameterized):
@@ -222,6 +223,86 @@ class DashboardState(param.Parameterized):
             self.selected_col_ids = data.get("col_ids", [])
         except (json.JSONDecodeError, TypeError):
             pass
+
+    def handle_zoom(self, zoom_range_json: str) -> None:
+        """Handle zoom events from JS. Recomputes layout with zoomed mappers."""
+        hm = self._current_hm
+        if hm is None or self._heatmap_pane is None:
+            return
+
+        try:
+            zoom_range = json.loads(zoom_range_json)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        try:
+            if zoom_range is None:
+                # Reset: use original mappers and full matrix
+                zoomed_row = hm._row_mapper
+                zoomed_col = hm._col_mapper
+                zoomed_matrix = hm._matrix
+            else:
+                zoomed_row = hm._row_mapper.apply_zoom(
+                    zoom_range["row_start"], zoom_range["row_end"]
+                )
+                zoomed_col = hm._col_mapper.apply_zoom(
+                    zoom_range["col_start"], zoom_range["col_end"]
+                )
+                zoomed_matrix = hm._matrix.slice(
+                    zoomed_row.visual_order, zoomed_col.visual_order,
+                )
+
+            # Recompute layout for zoomed view
+            legend_w, legend_h = hm._estimate_legend_dimensions()
+            row_lbl_w, col_lbl_h = hm._estimate_label_space(zoomed_row, zoomed_col)
+            zoomed_layout = hm._layout_composer.compute(
+                zoomed_row,
+                zoomed_col,
+                has_row_dendro=hm._row_cluster is not None,
+                has_col_dendro=hm._col_cluster is not None,
+                left_annotation_width=AnnotationLayoutEngine.total_edge_width(
+                    hm._annotations["left"]
+                ),
+                right_annotation_width=AnnotationLayoutEngine.total_edge_width(
+                    hm._annotations["right"]
+                ),
+                top_annotation_height=AnnotationLayoutEngine.total_edge_width(
+                    hm._annotations["top"]
+                ),
+                bottom_annotation_height=AnnotationLayoutEngine.total_edge_width(
+                    hm._annotations["bottom"]
+                ),
+                legend_panel_width=legend_w,
+                legend_panel_height=legend_h,
+                row_label_width=row_lbl_w,
+                col_label_height=col_lbl_h,
+            )
+
+            # Rebuild annotations and labels for zoomed mappers
+            zoomed_annotations = hm._build_annotation_data(
+                row_mapper=zoomed_row, col_mapper=zoomed_col,
+            )
+            zoomed_labels = hm._build_label_data(
+                row_mapper=zoomed_row, col_mapper=zoomed_col,
+                layout=zoomed_layout,
+            )
+            # Dendrograms not meaningful after zoom
+            zoomed_dendrograms = None if zoom_range is not None else hm._build_dendrogram_data()
+
+            self._heatmap_pane.set_data(
+                matrix=zoomed_matrix,
+                color_scale=hm._color_scale,
+                row_mapper=zoomed_row,
+                col_mapper=zoomed_col,
+                layout=zoomed_layout,
+                dendrograms=zoomed_dendrograms,
+                annotations=zoomed_annotations,
+                labels=zoomed_labels,
+                legends=hm._build_legend_data(),
+                color_bar_title=hm._color_bar_title,
+            )
+        except Exception:
+            traceback.print_exc()
 
     def trigger_rebuild(self) -> None:
         """Manually trigger a heatmap rebuild."""

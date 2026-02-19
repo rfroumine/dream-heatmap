@@ -115,20 +115,14 @@ class ChartPanelManager:
 
             idx = i
             remove_btn = pn.widgets.Button(
-                name="\u00d7", width=30, button_type="danger",
-                align="end",
+                name="Remove", width=70, button_type="danger",
             )
             remove_btn.on_click(lambda e, idx=idx: self._on_remove_chart(idx))
 
             card = pn.Card(
                 plotly_pane,
-                header=pn.Row(
-                    pn.pane.Str(
-                        f"{cfg['type'].title()}: {cfg['column']}",
-                        sizing_mode="stretch_width",
-                    ),
-                    remove_btn,
-                ),
+                pn.Row(remove_btn, align="end"),
+                title=f"{cfg['type'].title()}: {cfg['column']}",
                 sizing_mode="stretch_width",
                 width=400,
                 collapsed=False,

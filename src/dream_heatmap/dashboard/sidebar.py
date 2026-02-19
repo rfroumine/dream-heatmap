@@ -6,6 +6,7 @@ import param
 import panel as pn
 
 from .state import DashboardState
+from .code_export import generate_code
 
 
 # Colormaps relevant for bioinformatics heatmaps
@@ -40,6 +41,7 @@ class SidebarControls:
     def __init__(self, state: DashboardState) -> None:
         self.state = state
         self._annotation_list_col = pn.Column(sizing_mode="stretch_width")
+        self._code_display = pn.pane.Markdown("", sizing_mode="stretch_width")
         self._build_widgets()
 
     def _build_widgets(self) -> None:
@@ -61,8 +63,8 @@ class SidebarControls:
         )
 
         # --- Split section ---
-        row_meta_cols = [""] + s.get_row_metadata_columns()
-        col_meta_cols = [""] + s.get_col_metadata_columns()
+        row_meta_cols = [""] + s.get_row_metadata_columns() if s.row_metadata is not None else [""]
+        col_meta_cols = [""] + s.get_col_metadata_columns() if s.col_metadata is not None else [""]
 
         self.split_rows_select = pn.widgets.Select(
             name="Split rows by", value=s.split_rows_by,
@@ -101,6 +103,14 @@ class SidebarControls:
             options=col_meta_cols, sizing_mode="stretch_width",
         )
 
+        # Disable row-related widgets when no row metadata
+        if s.row_metadata is None:
+            self.split_rows_select.disabled = True
+            self.order_rows_select.disabled = True
+        if s.col_metadata is None:
+            self.split_cols_select.disabled = True
+            self.order_cols_select.disabled = True
+
         # --- Labels section ---
         self.row_labels_radio = pn.widgets.RadioButtonGroup(
             name="Row labels", value=s.row_labels,
@@ -114,20 +124,32 @@ class SidebarControls:
         # --- Annotation builder ---
         self.ann_type_select = pn.widgets.Select(
             name="Type", options=ANNOTATION_TYPES,
+            value=ANNOTATION_TYPES[0],
             sizing_mode="stretch_width",
         )
         self.ann_edge_select = pn.widgets.Select(
             name="Edge", options=ANNOTATION_EDGES,
+            value=ANNOTATION_EDGES[0],
             sizing_mode="stretch_width",
         )
+        ann_col_options = self._get_annotation_columns()
         self.ann_column_select = pn.widgets.Select(
-            name="Column", options=self._get_annotation_columns(),
+            name="Column", options=ann_col_options,
+            value=ann_col_options[0] if ann_col_options else "",
             sizing_mode="stretch_width",
         )
         self.ann_add_button = pn.widgets.Button(
             name="+ Add", button_type="primary",
             sizing_mode="stretch_width",
         )
+
+        # --- Export button ---
+        self.export_button = pn.widgets.Button(
+            name="Export as Code",
+            button_type="success",
+            sizing_mode="stretch_width",
+        )
+        self.export_button.on_click(self._on_export_code)
 
         # Wire up widget → state bindings
         self._wire_bindings()
@@ -218,7 +240,9 @@ class SidebarControls:
 
     def _update_annotation_columns(self) -> None:
         """Update the annotation column dropdown when type/edge changes."""
-        self.ann_column_select.options = self._get_annotation_columns()
+        new_options = self._get_annotation_columns()
+        self.ann_column_select.options = new_options
+        self.ann_column_select.value = new_options[0] if new_options else ""
 
     def _on_add_annotation(self, event) -> None:
         """Handle the Add annotation button click."""
@@ -244,6 +268,54 @@ class SidebarControls:
             self.state.annotations = anns
             self._refresh_annotation_list()
 
+    def _on_export_code(self, event) -> None:
+        """Generate code from current state and show it in a modal."""
+        code = generate_code(self.state)
+        # Update the code display pane with syntax-highlighted markdown
+        self._code_display.object = f"```python\n{code}\n```"
+        # Copy to clipboard via JS
+        escaped = code.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+        js = f"navigator.clipboard.writeText(`{escaped}`)"
+        try:
+            pn.state.execute(js)
+        except Exception:
+            pass  # clipboard may not be available in all contexts
+        # Open the modal
+        self._template.open_modal()
+
+    def set_template(self, template: pn.template.MaterialTemplate) -> None:
+        """Set reference to the template so we can open its modal."""
+        self._template = template
+
+    def build_modal_content(self) -> list:
+        """Return content to place inside the template modal."""
+        copy_btn = pn.widgets.Button(
+            name="Copy to Clipboard",
+            button_type="primary",
+            sizing_mode="stretch_width",
+        )
+        copy_btn.on_click(self._on_copy_clipboard)
+        return [
+            pn.pane.Markdown("## Export as Code", margin=(0, 0, 5, 0)),
+            pn.pane.Markdown(
+                "*Copied to clipboard! Paste into a notebook or script.*",
+                styles={"color": "#6b7280", "font-size": "12px"},
+                margin=(0, 0, 10, 0),
+            ),
+            self._code_display,
+            copy_btn,
+        ]
+
+    def _on_copy_clipboard(self, event) -> None:
+        """Copy the current code to clipboard again."""
+        code = generate_code(self.state)
+        escaped = code.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+        js = f"navigator.clipboard.writeText(`{escaped}`)"
+        try:
+            pn.state.execute(js)
+        except Exception:
+            pass
+
     def _refresh_annotation_list(self) -> None:
         """Rebuild the annotation list display."""
         items = []
@@ -267,6 +339,9 @@ class SidebarControls:
         """Build the complete sidebar panel."""
         return pn.Column(
             pn.pane.Markdown("## Controls", margin=(0, 0, 10, 0)),
+
+            self.export_button,
+            pn.layout.Divider(),
 
             pn.Card(
                 self.colormap_select,
