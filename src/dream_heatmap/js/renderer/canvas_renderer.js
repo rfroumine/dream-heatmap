@@ -71,11 +71,11 @@ class CanvasRenderer {
     const pixels = imageData.data;
 
     for (let r = 0; r < nRows; r++) {
-      const y0 = Math.round(rowPositions[r]);
-      const y1 = Math.min(Math.round(y0 + rowCellSize), height);
+      const y0 = Math.floor(rowPositions[r]);
+      const y1 = Math.min(Math.ceil(rowPositions[r] + rowCellSize), height);
       for (let c = 0; c < nCols; c++) {
-        const x0 = Math.round(colPositions[c]);
-        const x1 = Math.min(Math.round(x0 + colCellSize), width);
+        const x0 = Math.floor(colPositions[c]);
+        const x1 = Math.min(Math.ceil(colPositions[c] + colCellSize), width);
         const value = matrix[r * nCols + c];
         const [R, G, B, A] = colorMapper.map(value);
 

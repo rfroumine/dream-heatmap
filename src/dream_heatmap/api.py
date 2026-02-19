@@ -329,6 +329,31 @@ class Heatmap:
         self._annotations[edge].append(annotation)
         return self
 
+    # --- Size ---
+
+    def set_size(
+        self,
+        max_width: float | None = None,
+        max_height: float | None = None,
+    ) -> Heatmap:
+        """Control the maximum dimensions of the rendered heatmap.
+
+        Cell sizes are automatically adjusted to fit within these constraints.
+        Row and column cell sizes are computed independently.
+
+        Parameters
+        ----------
+        max_width : float, optional
+            Maximum total width in pixels (default 1000).
+        max_height : float, optional
+            Maximum total height in pixels (default 800).
+        """
+        if max_width is not None:
+            self._layout_composer._max_width = max_width
+        if max_height is not None:
+            self._layout_composer._max_height = max_height
+        return self
+
     # --- Labels ---
 
     def set_label_display(
@@ -871,8 +896,8 @@ class Heatmap:
                 block_h = title_height + len(legend["entries"]) * row_height
                 blocks.append((block_w, block_h))
 
-        # Available width ≈ heatmap width, clamped to reasonable range
-        available_width = max(300.0, min(800.0, self._col_mapper.size * 12.0))
+        # Available width derived from max_width budget, clamped to reasonable range
+        available_width = max(300.0, min(800.0, self._layout_composer._max_width - 200.0))
 
         # Simulate horizontal flow with wrapping
         cur_x = 0.0

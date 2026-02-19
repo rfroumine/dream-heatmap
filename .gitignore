@@ -12,6 +12,9 @@ build/
 # Generated HTML
 *.html
 
+# Generated data (run `python data/generate_tme_data.py` to regenerate)
+data/*.csv
+
 # Testing
 .pytest_cache/
 

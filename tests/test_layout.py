@@ -202,3 +202,43 @@ class TestLayoutComposer:
         )
         spec_no_label = composer.compute(row_mapper, col_mapper)
         assert spec.total_width > spec_no_label.total_width
+
+    def test_large_matrix_respects_max_width(self):
+        """20 rows × 5000 cols should fit within default max_width=1000."""
+        row_mapper = IDMapper.from_ids([f"r{i}" for i in range(20)])
+        col_mapper = IDMapper.from_ids([f"c{i}" for i in range(5000)])
+        composer = LayoutComposer(padding=20.0)
+        spec = composer.compute(row_mapper, col_mapper)
+        assert spec.total_width <= 1000.0 + 1e-6  # float tolerance
+
+    def test_independent_cell_sizes(self):
+        """Row and column cell sizes differ for non-square asymmetric matrices."""
+        row_mapper = IDMapper.from_ids([f"r{i}" for i in range(5)])
+        col_mapper = IDMapper.from_ids([f"c{i}" for i in range(500)])
+        composer = LayoutComposer(padding=20.0)
+        spec = composer.compute(row_mapper, col_mapper)
+        # 5 rows → large row cells (clamped to MAX_CELL_SIZE=50)
+        # 500 cols → small col cells
+        assert spec.row_cell_layout.cell_size == 50.0
+        assert spec.col_cell_layout.cell_size < 50.0
+        assert spec.col_cell_layout.cell_size < spec.row_cell_layout.cell_size
+
+    def test_custom_max_width(self):
+        """Custom max_width=500 produces a tighter layout."""
+        row_mapper = IDMapper.from_ids([f"r{i}" for i in range(10)])
+        col_mapper = IDMapper.from_ids([f"c{i}" for i in range(200)])
+        composer_wide = LayoutComposer(padding=20.0, max_width=1000)
+        composer_narrow = LayoutComposer(padding=20.0, max_width=500)
+        spec_wide = composer_wide.compute(row_mapper, col_mapper)
+        spec_narrow = composer_narrow.compute(row_mapper, col_mapper)
+        assert spec_narrow.total_width <= 500.0 + 1e-6  # float tolerance
+        assert spec_narrow.col_cell_layout.cell_size < spec_wide.col_cell_layout.cell_size
+
+    def test_sub_pixel_cells(self):
+        """Very large column count produces sub-pixel col_cell_size."""
+        row_mapper = IDMapper.from_ids([f"r{i}" for i in range(10)])
+        col_mapper = IDMapper.from_ids([f"c{i}" for i in range(20000)])
+        composer = LayoutComposer(padding=20.0)
+        spec = composer.compute(row_mapper, col_mapper)
+        assert spec.col_cell_layout.cell_size < 1.0
+        assert spec.col_cell_layout.cell_size >= 0.05  # MIN_CELL_SIZE

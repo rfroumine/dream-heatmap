@@ -14,10 +14,10 @@ DEFAULT_CELL_SIZE = 12.0
 DEFAULT_GAP_SIZE = 6.0
 DEFAULT_PADDING = 40.0  # space for labels on each side
 DEFAULT_DENDRO_HEIGHT = 80.0
-MIN_CELL_SIZE = 1.0
+MIN_CELL_SIZE = 0.05  # allow sub-pixel for large matrices
 MAX_CELL_SIZE = 50.0
-TARGET_HEATMAP_WIDTH = 500.0
-TARGET_HEATMAP_HEIGHT = 400.0
+DEFAULT_MAX_WIDTH = 1000.0   # reasonable max for Jupyter
+DEFAULT_MAX_HEIGHT = 800.0
 
 
 @dataclass
@@ -86,11 +86,15 @@ class LayoutComposer:
         gap_size: float = DEFAULT_GAP_SIZE,
         padding: float = DEFAULT_PADDING,
         dendro_height: float = DEFAULT_DENDRO_HEIGHT,
+        max_width: float = DEFAULT_MAX_WIDTH,
+        max_height: float = DEFAULT_MAX_HEIGHT,
     ) -> None:
         self._cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, cell_size))
         self._gap_size = gap_size
         self._padding = padding
         self._dendro_height = dendro_height
+        self._max_width = max_width
+        self._max_height = max_height
 
     def compute(
         self,
@@ -111,31 +115,59 @@ class LayoutComposer:
         row_dendro_w = self._dendro_height if has_row_dendro else 0.0
         col_dendro_h = self._dendro_height if has_col_dendro else 0.0
 
-        # Auto-scale cell size for small matrices to target reasonable heatmap dimensions
         n_rows = row_mapper.size
         n_cols = col_mapper.size
-        if n_rows > 0 and n_cols > 0:
-            auto_w = TARGET_HEATMAP_WIDTH / n_cols
-            auto_h = TARGET_HEATMAP_HEIGHT / n_rows
-            auto_cell = min(auto_w, auto_h)
-            cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, max(self._cell_size, auto_cell)))
+
+        # Fixed pixel components (everything except cell grid and gaps)
+        fixed_width = (
+            self._padding * 2
+            + row_dendro_w
+            + left_annotation_width
+            + right_annotation_width
+            + row_label_width
+        )
+        fixed_height = (
+            self._padding * 2
+            + col_dendro_h
+            + top_annotation_height
+            + bottom_annotation_height
+            + col_label_height
+        )
+        # Legend panel sits below the heatmap
+        if legend_panel_height > 0:
+            fixed_height += legend_panel_height + 16.0  # 16 = legend_gap
+
+        # Gap pixel totals
+        col_gap_total = len(col_mapper.gap_positions) * self._gap_size
+        row_gap_total = len(row_mapper.gap_positions) * self._gap_size
+
+        # Budget-based cell sizes (independent per axis)
+        if n_cols > 0:
+            col_cell_size = (self._max_width - fixed_width - col_gap_total) / n_cols
         else:
-            cell_size = self._cell_size
+            col_cell_size = self._cell_size
+        if n_rows > 0:
+            row_cell_size = (self._max_height - fixed_height - row_gap_total) / n_rows
+        else:
+            row_cell_size = self._cell_size
+
+        col_cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, col_cell_size))
+        row_cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, row_cell_size))
 
         # Heatmap origin shifts right/down for dendrograms + left/top annotations
         heatmap_x = self._padding + row_dendro_w + left_annotation_width
         heatmap_y = self._padding + col_dendro_h + top_annotation_height
 
         row_layout = CellLayout(
-            n_cells=row_mapper.size,
-            cell_size=cell_size,
+            n_cells=n_rows,
+            cell_size=row_cell_size,
             gap_positions=row_mapper.gap_positions,
             gap_size=self._gap_size,
             offset=heatmap_y,
         )
         col_layout = CellLayout(
-            n_cells=col_mapper.size,
-            cell_size=cell_size,
+            n_cells=n_cols,
+            cell_size=col_cell_size,
             gap_positions=col_mapper.gap_positions,
             gap_size=self._gap_size,
             offset=heatmap_x,
