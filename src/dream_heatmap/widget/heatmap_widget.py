@@ -1,11 +1,28 @@
-"""HeatmapWidget: anywidget bridge for Jupyter rendering."""
+"""HeatmapWidget: anywidget bridge for Jupyter rendering.
+
+Requires the [jupyter] optional extra: pip install dream-heatmap[jupyter]
+"""
 
 from __future__ import annotations
 
 import pathlib
 
-import anywidget
-import traitlets
+try:
+    import anywidget
+    import traitlets
+    _HAS_ANYWIDGET = True
+except ImportError:
+    _HAS_ANYWIDGET = False
+
+    # Minimal shim so the class body doesn't crash at definition time.
+    # The __init__ guard (_check_anywidget) prevents actual usage.
+    class _ShimDescriptor:
+        def __init__(self, *a, **kw): pass
+        def tag(self, **kw): return self
+
+    class traitlets:  # type: ignore[no-redef]
+        Bytes = _ShimDescriptor
+        Unicode = _ShimDescriptor
 
 from ..core.matrix import MatrixData
 from ..core.color_scale import ColorScale
@@ -23,7 +40,22 @@ from .selection import SelectionState
 _JS_DIR = pathlib.Path(__file__).parent.parent / "js"
 
 
-class HeatmapWidget(anywidget.AnyWidget):
+def _check_anywidget():
+    if not _HAS_ANYWIDGET:
+        raise ImportError(
+            "anywidget is required for Jupyter rendering. "
+            "Install it with: pip install dream-heatmap[jupyter]"
+        )
+
+
+# Only define the widget class if anywidget is available
+if _HAS_ANYWIDGET:
+    _BaseWidget = anywidget.AnyWidget
+else:
+    _BaseWidget = object
+
+
+class HeatmapWidget(_BaseWidget):
     """Jupyter widget for rendering interactive heatmaps.
 
     Communicates with JS via traitlets:
@@ -153,6 +185,7 @@ class HeatmapWidget(anywidget.AnyWidget):
         color_bar_title: str | None = None,
         **kwargs,
     ) -> None:
+        _check_anywidget()
         # Read JS source
         js_source = self._build_esm()
 

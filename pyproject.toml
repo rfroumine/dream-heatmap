@@ -27,13 +27,18 @@ dependencies = [
     "numpy>=1.23",
     "pandas>=1.5",
     "scipy>=1.9",
-    "anywidget>=0.9",
-    "ipywidgets>=8.0",
     "jinja2>=3.1",
     "matplotlib>=3.6",
+    "panel>=1.4",
+    "plotly>=5.0",
+    "param>=2.0",
 ]
 
 [project.optional-dependencies]
+jupyter = [
+    "anywidget>=0.9",
+    "ipywidgets>=8.0",
+]
 dev = [
     "pytest>=7",
     "pytest-cov",
