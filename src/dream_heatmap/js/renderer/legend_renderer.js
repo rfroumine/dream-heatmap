@@ -1,6 +1,6 @@
 /**
- * LegendRenderer: renders color bar + categorical legends in a horizontal
- * flow layout (wrapping to new rows when needed).
+ * LegendRenderer: renders color bar + categorical legends in a vertical
+ * stack layout (color bar on top, categorical legends stacked below).
  */
 
 class LegendRenderer {
@@ -10,7 +10,7 @@ class LegendRenderer {
   }
 
   /**
-   * Render legend entries with horizontal flow.
+   * Render legend entries with vertical stacking.
    * @param {Array|null} legends - [{name, entries: [{label, color}]}]
    * @param {object} legendPanel - {x, y, width, height} from layout
    * @param {ColorBarRenderer} colorBarRenderer - renders the inline color bar
@@ -33,57 +33,30 @@ class LegendRenderer {
     var swatchLabelGap = 6;
     var rowHeight = 14;
     var titleHeight = 16;
-    var itemGap = 24;
-    var rowGap = 12;
+    var blockGap = 16;
     var fontFamily = '"Open Sans", verdana, arial, sans-serif';
-    var charWidth = 6.5;
 
     var panelX = legendPanel.x;
-    var panelY = legendPanel.y;
-    var panelW = legendPanel.width;
-    var curX = panelX;
-    var curY = panelY;
-    var rowMaxH = 0;
-    var firstOnRow = true;
+    var curY = legendPanel.y;
 
-    // --- Color bar block (always first) ---
+    // --- Color bar block (always first, on top) ---
     if (colorBarRenderer && lut) {
       var cbResult = colorBarRenderer.renderInline(
-        curX, curY, lut, vmin, vmax, colorBarTitle || null, this._group
+        panelX, curY, lut, vmin, vmax, colorBarTitle || null, this._group
       );
-      curX += cbResult.width + itemGap;
-      rowMaxH = Math.max(rowMaxH, cbResult.height);
-      firstOnRow = false;
+      curY += cbResult.height + blockGap;
     }
 
-    // --- Categorical legend blocks ---
+    // --- Categorical legend blocks (stacked vertically) ---
     if (legends && legends.length) {
       for (var li = 0; li < legends.length; li++) {
         var legend = legends[li];
         var entries = legend.entries || [];
 
-        // Estimate block dimensions
-        var titleW = legend.name.length * charWidth;
-        var maxEntryW = 0;
-        for (var ei = 0; ei < entries.length; ei++) {
-          var ew = swatchSize + swatchLabelGap + entries[ei].label.length * charWidth;
-          if (ew > maxEntryW) maxEntryW = ew;
-        }
-        var blockW = Math.max(titleW, maxEntryW) + 10;
-        var blockH = titleHeight + entries.length * rowHeight;
-
-        // Wrap check
-        if (!firstOnRow && curX + blockW > panelX + panelW) {
-          curY += rowMaxH + rowGap;
-          curX = panelX;
-          rowMaxH = 0;
-          firstOnRow = true;
-        }
-
         // Render title
         var title = document.createElementNS(ns, "text");
         title.textContent = legend.name;
-        title.setAttribute("x", curX);
+        title.setAttribute("x", panelX);
         title.setAttribute("y", curY + 10);
         title.setAttribute("font-size", "10");
         title.setAttribute("font-weight", "bold");
@@ -94,12 +67,12 @@ class LegendRenderer {
         var entryY = curY + titleHeight;
 
         // Render entries
-        for (var ei2 = 0; ei2 < entries.length; ei2++) {
-          var entry = entries[ei2];
+        for (var ei = 0; ei < entries.length; ei++) {
+          var entry = entries[ei];
 
           // Color swatch
           var rect = document.createElementNS(ns, "rect");
-          rect.setAttribute("x", curX);
+          rect.setAttribute("x", panelX);
           rect.setAttribute("y", entryY);
           rect.setAttribute("width", swatchSize);
           rect.setAttribute("height", swatchSize);
@@ -110,7 +83,7 @@ class LegendRenderer {
           // Label
           var label = document.createElementNS(ns, "text");
           label.textContent = entry.label;
-          label.setAttribute("x", curX + swatchSize + swatchLabelGap);
+          label.setAttribute("x", panelX + swatchSize + swatchLabelGap);
           label.setAttribute("y", entryY + swatchSize * 0.8);
           label.setAttribute("font-size", "10");
           label.setAttribute("font-family", fontFamily);
@@ -120,9 +93,8 @@ class LegendRenderer {
           entryY += rowHeight;
         }
 
-        curX += blockW + itemGap;
-        rowMaxH = Math.max(rowMaxH, blockH);
-        firstOnRow = false;
+        var blockH = titleHeight + entries.length * rowHeight;
+        curY += blockH + blockGap;
       }
     }
 

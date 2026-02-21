@@ -15,161 +15,172 @@ from .chart_panel import ChartPanelManager
 # ---------------------------------------------------------------------------
 
 _DASHBOARD_CSS = """
-/* ---- Typography ---- */
-body, .mdc-typography {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter",
-               "Roboto", "Helvetica Neue", Arial, sans-serif !important;
+/* ================================================================
+   Layer 1 — CSS Custom Properties
+   ================================================================ */
+:root, :host {
+  --design-primary-color: #1a73e8;
+  --design-primary-text-color: #ffffff;
+  --design-secondary-color: #1557b0;
+  --design-surface-color: #ffffff;
+  --design-background-color: #fafafa;
+  --panel-primary-color: #1a73e8;
+  --panel-secondary-color: #1557b0;
+  --mdc-theme-primary: #1a73e8;
+  --mdc-theme-secondary: #1557b0;
+  --mdc-theme-surface: #ffffff;
+  --mdc-shape-medium: 16px;
 }
 
-/* ---- Sidebar ---- */
-#sidebar {
-  background: #f9fafb !important;
-  border-right: 1px solid #e5e7eb !important;
-  padding: 12px 16px !important;
-}
-#sidebar .mdc-drawer__content {
-  background: #f9fafb !important;
-}
+/* ================================================================
+   Layer 2 — Component overrides (organic + Inter)
+   ================================================================ */
 
-/* ---- Sidebar section headers ---- */
-#sidebar h2, #sidebar .markdown h2 {
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  color: #6b7280 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.05em !important;
-  margin-bottom: 8px !important;
-}
-
-/* ---- Widget labels ---- */
-#sidebar label, #sidebar .bk-input-group label {
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  color: #374151 !important;
-}
-
-/* ---- Cards ---- */
-#sidebar .card {
-  border-radius: 8px !important;
-  border: 1px solid #e5e7eb !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-  background: #ffffff !important;
-  margin-bottom: 8px !important;
-  overflow: hidden !important;
-}
-#sidebar .card-header {
-  background: transparent !important;
-  border-bottom: 1px solid #f3f4f6 !important;
-  padding: 8px 12px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  color: #374151 !important;
-}
-#sidebar .card-body, #sidebar .card .bk-Column {
-  padding: 8px 12px !important;
-}
-
-/* ---- Buttons ---- */
-#sidebar .bk-btn-primary {
-  border-radius: 6px !important;
-  background-color: #6366f1 !important;
-  border-color: #6366f1 !important;
+/* ---- Pill buttons (primary + success) ---- */
+.bk-btn-primary, .bk-btn-success {
+  border-radius: 24px !important;
+  background-color: #1a73e8 !important;
+  border-color: #1a73e8 !important;
   color: #ffffff !important;
+  box-shadow: none !important;
   font-weight: 500 !important;
-  font-size: 12px !important;
-  text-transform: none !important;
-  letter-spacing: 0 !important;
-  box-shadow: 0 1px 2px rgba(99,102,241,0.2) !important;
-}
-#sidebar .bk-btn-primary:hover {
-  background-color: #4f46e5 !important;
-  border-color: #4f46e5 !important;
-}
-
-/* Export button special styling */
-#sidebar .bk-btn-success {
-  border-radius: 6px !important;
-  background-color: #6366f1 !important;
-  border-color: #6366f1 !important;
-  color: #ffffff !important;
-  font-weight: 600 !important;
   font-size: 13px !important;
   text-transform: none !important;
   letter-spacing: 0 !important;
-  box-shadow: 0 1px 3px rgba(99,102,241,0.3) !important;
-  padding: 8px 16px !important;
 }
-#sidebar .bk-btn-success:hover {
-  background-color: #4f46e5 !important;
-  border-color: #4f46e5 !important;
+.bk-btn-primary:hover, .bk-btn-success:hover {
+  background-color: #1557b0 !important;
+  border-color: #1557b0 !important;
 }
 
-#sidebar .bk-btn-danger {
-  border-radius: 6px !important;
+/* ---- Outlined danger button ---- */
+.bk-btn-danger {
+  border-radius: 24px !important;
+  background-color: transparent !important;
+  border: 1px solid #d93025 !important;
+  color: #d93025 !important;
   font-size: 11px !important;
+  font-weight: 500 !important;
   text-transform: none !important;
+  box-shadow: none !important;
+}
+.bk-btn-danger:hover {
+  background-color: rgba(217,48,37,0.08) !important;
 }
 
 /* ---- Toggle buttons (active state) ---- */
-#sidebar .bk-btn-default.active,
-#sidebar .bk-active {
-  background-color: #eff6ff !important;
-  border-color: #6366f1 !important;
-  color: #6366f1 !important;
+.bk-btn-default.active,
+.bk-active {
+  background-color: #e8f0fe !important;
+  border-color: #1a73e8 !important;
+  color: #1a73e8 !important;
 }
 
-/* ---- Select / Input widgets ---- */
-#sidebar select, #sidebar .bk-input {
-  border-radius: 6px !important;
-  border: 1px solid #d1d5db !important;
-  font-size: 12px !important;
+/* ---- Input / select widgets ---- */
+.bk-input, select {
+  border-radius: 10px !important;
+  border: 1px solid #dadce0 !important;
+  font-size: 13px !important;
   padding: 5px 8px !important;
 }
-#sidebar select:focus, #sidebar .bk-input:focus {
-  border-color: #6366f1 !important;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.15) !important;
+.bk-input:focus, select:focus {
+  border-color: #1a73e8 !important;
+  box-shadow: 0 0 0 2px rgba(26,115,232,0.2) !important;
 }
 
 /* ---- Radio button group ---- */
-#sidebar .bk-btn-group .bk-btn {
+.bk-btn-group .bk-btn {
   font-size: 11px !important;
   border-radius: 4px !important;
   text-transform: none !important;
 }
 
-/* ---- Spacing ---- */
-#sidebar .bk-Column > div {
-  margin-bottom: 4px !important;
+/* ---- Cards ---- */
+.card {
+  border-radius: 16px !important;
+  border: none !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08),
+              0 1px 2px rgba(0,0,0,0.06) !important;
+  margin-bottom: 8px !important;
+}
+.card-header {
+  background: transparent !important;
+  border-bottom: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  padding: 12px 16px !important;
 }
 
-/* ---- Header bar ---- */
-.mdc-top-app-bar {
-  background-color: #ffffff !important;
-  border-bottom: 1px solid #e5e7eb !important;
-  box-shadow: none !important;
-}
-.mdc-top-app-bar .mdc-top-app-bar__title {
-  color: #111827 !important;
-  font-weight: 600 !important;
-  font-size: 16px !important;
-}
-
-/* ---- Main content area ---- */
-.main .bk-Column {
-  padding: 16px !important;
+/* ---- Labels ---- */
+label, .bk-input-group label {
+  font-size: 12px !important;
+  font-weight: 500 !important;
 }
 
 /* ---- Divider ---- */
 .bk-Divider {
-  border-top: 1px solid #e5e7eb !important;
+  border-top: 1px solid #f0f0f0 !important;
   margin: 8px 0 !important;
+}
+
+/* ================================================================
+   Layer 3 — Template-level CSS
+   ================================================================ */
+
+/* ---- Inter font ---- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+body, .mdc-typography {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  color: #202124 !important;
+}
+
+/* ---- Compact header ---- */
+.mdc-top-app-bar {
+  height: 44px !important;
+  min-height: 44px !important;
+  background: #fafafa !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+.mdc-top-app-bar__title {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: #202124 !important;
+  letter-spacing: -0.01em !important;
+}
+.mdc-top-app-bar__row {
+  height: 44px !important;
+  min-height: 44px !important;
+}
+.mdc-top-app-bar--fixed-adjust {
+  padding-top: 44px !important;
+}
+
+/* ---- Header icon visibility ---- */
+.mdc-top-app-bar .mdc-icon-button,
+.mdc-top-app-bar .mdc-top-app-bar__navigation-icon,
+.mdc-top-app-bar .mdc-top-app-bar__action-item {
+  color: #202124 !important;
+}
+
+/* ---- Organic sidebar (shadow, no hard border) ---- */
+#sidebar {
+  background: #fafafa !important;
+  border-right: none !important;
+  box-shadow: 1px 0 3px rgba(0,0,0,0.04) !important;
+}
+#sidebar .mdc-drawer__content { background: #fafafa !important; }
+
+/* ---- Main content area ---- */
+.main .bk-Column {
+  padding: 12px !important;
 }
 
 /* ---- Code export modal ---- */
 .code-export-modal pre {
   background: #1e1e2e !important;
   color: #cdd6f4 !important;
-  border-radius: 8px !important;
+  border-radius: 16px !important;
   padding: 16px !important;
   font-size: 12px !important;
   line-height: 1.5 !important;
@@ -196,13 +207,14 @@ class DashboardApp:
     ) -> None:
         pn.extension("plotly", sizing_mode="stretch_width")
 
-        # Inject custom CSS
+        # Inject custom CSS and loading spinner color
         pn.config.raw_css.append(_DASHBOARD_CSS)
+        pn.config.loading_color = "#1a73e8"
 
         # Create the heatmap pane (JSComponent)
         self.heatmap_pane = HeatmapPane(
             sizing_mode="stretch_width",
-            min_height=400,
+            min_height=250,
         )
 
         # Create centralized state
@@ -225,9 +237,20 @@ class DashboardApp:
             "zoom_range_json",
         )
 
-        # Build sidebar and chart panel
-        self.sidebar_controls = SidebarControls(self.state)
-        self.chart_manager = ChartPanelManager(self.state)
+        # Chart layout container (bottom grid only)
+        self._bottom_chart_grid = pn.GridBox(
+            ncols=2,
+            visible=False,
+            css_classes=["hm-bottom-charts"],
+            sizing_mode="stretch_width",
+        )
+
+        # Build chart manager and sidebar
+        self.chart_manager = ChartPanelManager(
+            self.state,
+            bottom_grid=self._bottom_chart_grid,
+        )
+        self.sidebar_controls = SidebarControls(self.state, chart_manager=self.chart_manager)
 
         # Trigger initial render
         self.state.trigger_rebuild()
@@ -235,22 +258,21 @@ class DashboardApp:
     def _build_template(self) -> pn.template.MaterialTemplate:
         """Build the Panel MaterialTemplate layout."""
         template = pn.template.MaterialTemplate(
-            title="dream-heatmap Explorer",
+            title="dream heatmap",
             sidebar=[self.sidebar_controls.build_panel()],
-            sidebar_width=320,
-            header_background="#ffffff",
-            header_color="#111827",
+            sidebar_width=260,
+            header_background="#fafafa",
+            header_color="#202124",
         )
 
         # Wire sidebar → template for modal support
         self.sidebar_controls.set_template(template)
         template.modal.extend(self.sidebar_controls.build_modal_content())
 
-        # Main content area
+        # Main content: full-width heatmap + bottom chart grid
         main_content = pn.Column(
             self.heatmap_pane,
-            pn.layout.Divider(),
-            self.chart_manager.build_panel(),
+            self._bottom_chart_grid,
             sizing_mode="stretch_width",
         )
         template.main.append(main_content)

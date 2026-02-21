@@ -302,7 +302,7 @@ function buildZoomedResolver(origMapperData, positions, cellSize, start, end) {
   var selectionHandler = new SelectionHandler(svg, svgOverlay, dummySync, hoverHandler);
   var dendroClickHandler = new DendrogramClickHandler(svgOverlay, dummySync);
   var viewport = new Viewport();
-  var zoomHandler = new ZoomHandler(svg, dummySync, viewport);
+  var zoomHandler = new ZoomHandler(svg, dummySync, viewport, svgOverlay);
   selectionHandler.setZoomHandler(zoomHandler);
   dendroClickHandler.setZoomHandler(zoomHandler);
 

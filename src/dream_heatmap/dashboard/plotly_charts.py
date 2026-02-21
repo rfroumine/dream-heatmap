@@ -19,7 +19,7 @@ _LAYOUT_DEFAULTS = dict(
     template="plotly_white",
     margin=dict(l=50, r=20, t=30, b=40),
     height=250,
-    font=dict(family="Open Sans, verdana, arial, sans-serif", size=11),
+    font=dict(family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", size=11),
     showlegend=True,
     legend=dict(
         orientation="h", yanchor="bottom", y=1.02,
@@ -27,11 +27,32 @@ _LAYOUT_DEFAULTS = dict(
     ),
 )
 
+_COMPACT_OVERRIDES = dict(
+    margin=dict(l=40, r=10, t=24, b=24),
+    height=200,
+    font=dict(family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif", size=10),
+    legend=dict(
+        orientation="h", yanchor="bottom", y=1.02,
+        xanchor="right", x=1, font=dict(size=9),
+    ),
+)
+
+
+def _get_layout(compact: bool = False, **extra) -> dict:
+    """Return layout kwargs, applying compact overrides if needed."""
+    layout = {**_LAYOUT_DEFAULTS, **extra}
+    if compact:
+        layout.update(_COMPACT_OVERRIDES)
+        # Hide x-axis title in compact mode
+        layout["xaxis_title"] = None
+    return layout
+
 
 def build_box(
     values: pd.Series,
     selected_ids: list | None = None,
     name: str = "",
+    compact: bool = False,
 ) -> go.Figure:
     """Build a box plot with All vs Selected traces."""
     fig = go.Figure()
@@ -52,7 +73,7 @@ def build_box(
                 boxmean="sd",
             ))
 
-    fig.update_layout(title=name, yaxis_title=name, **_LAYOUT_DEFAULTS)
+    fig.update_layout(**_get_layout(compact, title=name, yaxis_title=name))
     return fig
 
 
@@ -60,6 +81,7 @@ def build_violin(
     values: pd.Series,
     selected_ids: list | None = None,
     name: str = "",
+    compact: bool = False,
 ) -> go.Figure:
     """Build a violin plot with All vs Selected traces."""
     fig = go.Figure()
@@ -80,7 +102,7 @@ def build_violin(
                 meanline_visible=True,
             ))
 
-    fig.update_layout(title=name, yaxis_title=name, **_LAYOUT_DEFAULTS)
+    fig.update_layout(**_get_layout(compact, title=name, yaxis_title=name))
     return fig
 
 
@@ -88,6 +110,7 @@ def build_bar(
     values: pd.Series,
     selected_ids: list | None = None,
     name: str = "",
+    compact: bool = False,
 ) -> go.Figure:
     """Build a bar chart showing value counts (categorical data)."""
     fig = go.Figure()
@@ -116,10 +139,9 @@ def build_bar(
                 marker_line_width=1,
             ))
 
-    fig.update_layout(
-        title=name, xaxis_title=name, yaxis_title="Count",
-        barmode="group", **_LAYOUT_DEFAULTS,
-    )
+    fig.update_layout(**_get_layout(
+        compact, title=name, xaxis_title=name, yaxis_title="Count", barmode="group",
+    ))
     return fig
 
 
@@ -129,6 +151,7 @@ def build_scatter(
     selected_ids: list | None = None,
     x_name: str = "",
     y_name: str = "",
+    compact: bool = False,
 ) -> go.Figure:
     """Build a scatter plot with All vs Selected points."""
     fig = go.Figure()
@@ -149,11 +172,11 @@ def build_scatter(
                             line=dict(width=0.5, color=COLOR_SELECTED_LINE)),
             ))
 
-    fig.update_layout(
+    fig.update_layout(**_get_layout(
+        compact,
         title=f"{y_name} vs {x_name}",
         xaxis_title=x_name, yaxis_title=y_name,
-        **_LAYOUT_DEFAULTS,
-    )
+    ))
     return fig
 
 
@@ -161,6 +184,7 @@ def build_histogram(
     values: pd.Series,
     selected_ids: list | None = None,
     name: str = "",
+    compact: bool = False,
 ) -> go.Figure:
     """Build a histogram with All vs Selected traces."""
     fig = go.Figure()
@@ -185,8 +209,7 @@ def build_histogram(
                 opacity=0.7,
             ))
 
-    fig.update_layout(
-        title=name, xaxis_title=name, yaxis_title="Count",
-        barmode="overlay", **_LAYOUT_DEFAULTS,
-    )
+    fig.update_layout(**_get_layout(
+        compact, title=name, xaxis_title=name, yaxis_title="Count", barmode="overlay",
+    ))
     return fig

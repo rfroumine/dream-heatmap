@@ -957,10 +957,8 @@ class Heatmap:
     def _estimate_legend_dimensions(self) -> tuple[float, float]:
         """Estimate the pixel width and height needed for the legend panel.
 
-        Uses horizontal flow with wrapping. The color bar is always the first
-        block; categorical legends follow. Returns (width, height).
-        Both 0.0 only if there are no legends AND no color bar title is set
-        (but since every heatmap has a color bar, this always returns >0).
+        Uses vertical stacking: color bar on top, categorical legends stacked
+        below. Returns (width, height).
         """
         # Constants matching legend_renderer.js
         swatch_size = 10.0
@@ -968,8 +966,7 @@ class Heatmap:
         char_width = 6.5  # approximate at 10px font
         row_height = 14.0
         title_height = 16.0
-        item_gap = 24.0  # horizontal gap between legend groups
-        row_gap = 12.0   # vertical gap between wrapped rows
+        block_gap = 16.0  # vertical gap between stacked blocks
 
         # Color bar block dimensions
         color_bar_width = 140.0
@@ -992,27 +989,8 @@ class Heatmap:
                 block_h = title_height + len(legend["entries"]) * row_height
                 blocks.append((block_w, block_h))
 
-        # Available width derived from max_width budget, clamped to reasonable range
-        available_width = max(300.0, min(800.0, self._layout_composer._max_width - 200.0))
+        # Vertical stack: width is the widest block, height is all blocks stacked
+        total_width = max(bw for bw, bh in blocks)
+        total_height = sum(bh for bw, bh in blocks) + block_gap * (len(blocks) - 1)
 
-        # Simulate horizontal flow with wrapping
-        cur_x = 0.0
-        row_max_h = 0.0
-        total_height = 0.0
-        first_on_row = True
-
-        for bw, bh in blocks:
-            if not first_on_row and cur_x + bw > available_width:
-                # Wrap to new row
-                total_height += row_max_h + row_gap
-                cur_x = 0.0
-                row_max_h = 0.0
-                first_on_row = True
-            cur_x += bw + item_gap
-            row_max_h = max(row_max_h, bh)
-            first_on_row = False
-
-        # Add the last row
-        total_height += row_max_h
-
-        return available_width, total_height
+        return total_width, total_height

@@ -70,11 +70,24 @@ class PanelModelSync {
 
   /**
    * Register a callback for when any data property changes.
+   * Uses requestAnimationFrame to coalesce rapid property updates
+   * (e.g. during zoom) into a single render, preventing intermediate
+   * renders with mismatched matrix/layout dimensions.
    * @param {function} callback
    */
   onChange(callback) {
+    var rafPending = false;
+    var debounced = function() {
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(function() {
+          rafPending = false;
+          callback();
+        });
+      }
+    };
     for (const prop of ["matrix_b64", "color_lut_b64", "layout_json", "id_mappers_json", "config_json"]) {
-      this._model.on(prop, callback);
+      this._model.on(prop, debounced);
     }
   }
 }

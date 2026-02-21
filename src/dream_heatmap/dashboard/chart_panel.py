@@ -14,56 +14,47 @@ CHART_TYPES = ["box", "violin", "bar", "scatter", "histogram"]
 
 
 class ChartPanelManager:
-    """Manages the chart panel below the heatmap.
+    """Manages analysis charts in a bottom grid below the heatmap."""
 
-    Users add charts via the "+ Add chart" bar. Each chart shows
-    "All" (gray) vs "Selected" (highlighted) traces that update
-    when the selection changes.
-    """
-
-    def __init__(self, state: DashboardState) -> None:
+    def __init__(
+        self,
+        state: DashboardState,
+        bottom_grid: pn.GridBox,
+    ) -> None:
         self.state = state
-        self._chart_panes: list[pn.Card] = []
-        self._charts_container = pn.FlexBox(
-            sizing_mode="stretch_width",
-            flex_wrap="wrap",
-            min_height=50,
-        )
+        self._bottom_grid = bottom_grid
 
-        # Build the add-chart controls
+        # Build the add-chart widgets (placed in sidebar by SidebarControls)
         self._build_add_bar()
 
         # Watch for selection changes to update charts
         state.param.watch(self._on_selection_change, ["selected_row_ids", "selected_col_ids"])
 
     def _build_add_bar(self) -> None:
-        """Build the '+ Add chart' control bar."""
+        """Build the '+ Add chart' control widgets."""
         self.chart_type_select = pn.widgets.Select(
             name="Type", options=CHART_TYPES, value="box",
-            width=100,
+            sizing_mode="stretch_width",
         )
         self.chart_column_select = pn.widgets.Select(
             name="Column", options=self._get_chart_columns(),
-            width=150,
+            sizing_mode="stretch_width",
         )
         # For scatter: second column
         self.chart_y_column_select = pn.widgets.Select(
             name="Y Column", options=self._get_chart_columns(),
-            width=120, visible=False,
+            sizing_mode="stretch_width", visible=False,
         )
         self.chart_add_button = pn.widgets.Button(
             name="+ Add chart", button_type="primary",
-            width=100,
+            sizing_mode="stretch_width",
         )
 
         self.chart_add_button.on_click(self._on_add_chart)
         self.chart_type_select.param.watch(self._on_type_change, "value")
 
     def _get_chart_columns(self) -> list[str]:
-        """Get available columns for chart data.
-
-        Combines expression row names (markers) and metadata columns.
-        """
+        """Get available columns for chart data."""
         cols = []
         cols.extend(self.state.get_expression_row_names())
         cols.extend(self.state.get_col_metadata_columns())
@@ -104,14 +95,19 @@ class ChartPanelManager:
         self._rebuild_charts()
 
     def _rebuild_charts(self) -> None:
-        """Rebuild all chart panes from current configs and selection."""
+        """Rebuild all chart panes into the bottom grid."""
         panes = []
+
         for i, cfg in enumerate(self.state.chart_configs):
             fig = self._build_chart_figure(cfg)
             if fig is None:
                 continue
 
-            plotly_pane = pn.pane.Plotly(fig, sizing_mode="stretch_width", height=280)
+            plotly_pane = pn.pane.Plotly(
+                fig,
+                sizing_mode="stretch_width",
+                height=250,
+            )
 
             idx = i
             remove_btn = pn.widgets.Button(
@@ -124,12 +120,12 @@ class ChartPanelManager:
                 pn.Row(remove_btn, align="end"),
                 title=f"{cfg['type'].title()}: {cfg['column']}",
                 sizing_mode="stretch_width",
-                width=400,
                 collapsed=False,
             )
             panes.append(card)
 
-        self._charts_container.objects = panes
+        self._bottom_grid.objects = panes
+        self._bottom_grid.visible = len(panes) > 0
 
     def _build_chart_figure(self, cfg: dict):
         """Build a Plotly figure from a chart config dict."""
@@ -161,10 +157,7 @@ class ChartPanelManager:
         return None
 
     def _get_values(self, column: str) -> pd.Series | None:
-        """Get a Series of values for the given column name.
-
-        Checks expression matrix rows first, then col_metadata columns.
-        """
+        """Get a Series of values for the given column name."""
         s = self.state
 
         # Check expression matrix rows (markers)
@@ -176,19 +169,3 @@ class ChartPanelManager:
             return s.col_metadata[column]
 
         return None
-
-    def build_panel(self) -> pn.Column:
-        """Build the complete chart panel."""
-        add_bar = pn.Row(
-            self.chart_type_select,
-            self.chart_column_select,
-            self.chart_y_column_select,
-            self.chart_add_button,
-            sizing_mode="stretch_width",
-            margin=(5, 0),
-        )
-        return pn.Column(
-            add_bar,
-            self._charts_container,
-            sizing_mode="stretch_width",
-        )

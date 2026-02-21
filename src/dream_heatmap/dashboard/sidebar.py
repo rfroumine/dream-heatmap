@@ -8,6 +8,10 @@ import panel as pn
 from .state import DashboardState
 from .code_export import generate_code
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .chart_panel import ChartPanelManager
+
 
 # Colormaps relevant for bioinformatics heatmaps
 COLORMAP_OPTIONS = [
@@ -57,8 +61,13 @@ class SidebarControls:
     trigger heatmap rebuilds.
     """
 
-    def __init__(self, state: DashboardState) -> None:
+    def __init__(
+        self,
+        state: DashboardState,
+        chart_manager: ChartPanelManager | None = None,
+    ) -> None:
         self.state = state
+        self.chart_manager = chart_manager
         self._syncing = False  # Guard flag: suppresses widget→state callbacks
         self._annotation_list_col = pn.Column(sizing_mode="stretch_width")
         self._code_display = pn.pane.Markdown("", sizing_mode="stretch_width")
@@ -668,14 +677,23 @@ class SidebarControls:
             items.append(row)
         self._annotation_list_col.objects = items
 
+    def _build_charts_card(self) -> list:
+        """Return the Charts card for the sidebar, or empty list if no chart_manager."""
+        if self.chart_manager is None:
+            return []
+        cm = self.chart_manager
+        return [pn.Card(
+            cm.chart_type_select,
+            cm.chart_column_select,
+            cm.chart_y_column_select,
+            cm.chart_add_button,
+            title="Charts", collapsed=True,
+            sizing_mode="stretch_width",
+        )]
+
     def build_panel(self) -> pn.Column:
         """Build the complete sidebar panel."""
         return pn.Column(
-            pn.pane.Markdown("## Controls", margin=(0, 0, 10, 0)),
-
-            self.export_button,
-            pn.layout.Divider(),
-
             pn.Card(
                 self.scale_method_select,
                 self.scale_method_help,
@@ -734,6 +752,8 @@ class SidebarControls:
                 title="Column Ordering", collapsed=True,
                 sizing_mode="stretch_width",
             ),
+
+            *(self._build_charts_card()),
 
             self.status_text,
 

@@ -12,11 +12,13 @@ class ZoomHandler {
    * @param {SVGElement} svg - the SVG overlay element
    * @param {ModelSync} modelSync - for sending zoom range to Python
    * @param {Viewport} viewport - tracks current zoom state
+   * @param {SVGOverlay} svgOverlay - for immediately hiding selection overlay
    */
-  constructor(svg, modelSync, viewport) {
+  constructor(svg, modelSync, viewport, svgOverlay) {
     this._svg = svg;
     this._modelSync = modelSync;
     this._viewport = viewport;
+    this._svgOverlay = svgOverlay;
 
     this._layout = null;
     this._rowResolver = null;
@@ -79,6 +81,9 @@ class ZoomHandler {
     const { rowStart, rowEnd, colStart, colEnd } = this._lastSelectionBounds;
     if (rowStart >= rowEnd || colStart >= colEnd) return;
 
+    // Hide selection overlay immediately (don't wait for Python round-trip)
+    this._svgOverlay.hideSelection();
+
     this._viewport.setRange(rowStart, rowEnd, colStart, colEnd);
 
     // Send zoom range to Python
@@ -91,6 +96,7 @@ class ZoomHandler {
   }
 
   _resetZoom() {
+    this._svgOverlay.hideSelection();
     this._viewport.reset();
     this._lastSelectionBounds = null;
     this._modelSync.setZoomRange(null);

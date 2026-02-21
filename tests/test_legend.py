@@ -93,21 +93,21 @@ class TestEstimateLegendDimensions:
         assert w > 0
         assert h > 0  # color bar block
 
-    def test_single_legend_horizontal_flow(self, matrix_df, row_series):
-        """Color bar and one legend side-by-side: height = max of both blocks."""
+    def test_single_legend_vertical_stack(self, matrix_df, row_series):
+        """Color bar and one legend stacked: height = sum of both + gap."""
         hm = Heatmap(matrix_df)
         hm.add_annotation("left", CategoricalAnnotation("Cell Type", row_series))
         w, h = hm._estimate_legend_dimensions()
         assert w > 0
         assert h > 0
-        # Height should be max of color bar height and legend height
-        # (both fit on one row), not a sum
+        # Height should be sum of color bar + legend + gap (vertical stack)
         legend_h = 16.0 + 3 * 14.0  # title + 3 entries = 58
         color_bar_h = 26.0  # no title
-        assert h == max(color_bar_h, legend_h)
+        block_gap = 16.0
+        assert h == color_bar_h + legend_h + block_gap
 
-    def test_two_legends_horizontal_flow(self, matrix_df, row_series, col_series):
-        """Two legends + color bar: all on one row if they fit."""
+    def test_two_legends_vertical_stack(self, matrix_df, row_series, col_series):
+        """Two legends + color bar: all stacked vertically."""
         hm = Heatmap(matrix_df)
         hm.add_annotation("left", CategoricalAnnotation("Cell Type", row_series))
         hm.add_annotation("top", CategoricalAnnotation("Treatment", col_series))

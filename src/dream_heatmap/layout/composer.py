@@ -17,7 +17,7 @@ DEFAULT_DENDRO_HEIGHT = 80.0
 MIN_CELL_SIZE = 0.05  # allow sub-pixel for large matrices
 MAX_CELL_SIZE = 50.0
 DEFAULT_MAX_WIDTH = 1000.0   # reasonable max for Jupyter
-DEFAULT_MAX_HEIGHT = 800.0
+DEFAULT_MAX_HEIGHT = 500.0
 
 
 @dataclass
@@ -161,9 +161,7 @@ class LayoutComposer:
             + top_label_height
             + bottom_label_height
         )
-        # Legend panel sits below the heatmap
-        if legend_panel_height > 0:
-            fixed_height += legend_panel_height + 16.0  # 16 = legend_gap
+        # Legend panel is to the right — does not add to fixed_height
 
         # Gap pixel totals (use per-gap sizes if provided)
         if col_gap_sizes:
@@ -226,24 +224,22 @@ class LayoutComposer:
 
         total_width = heatmap_x + col_layout.total_size + right_annotation_width + right_label_width + self._padding
 
-        # Total height accounts for col labels and legend panel below heatmap
+        # Total height: heatmap + bottom annotations/labels + padding
         heatmap_bottom = heatmap_y + row_layout.total_size + bottom_annotation_height + bottom_label_height
 
-        # Legend panel below the heatmap area
+        # Legend panel to the right of the heatmap area
         if legend_panel_height > 0 and legend_panel_width > 0:
-            legend_gap = 16.0
-            lp_x = heatmap_x
-            lp_y = heatmap_bottom + legend_gap
+            legend_gap = 60.0  # large gap between heatmap and legend column
+            lp_x = total_width + legend_gap
+            lp_y = heatmap_y  # top-aligned with heatmap
             legend_panel_rect = Rect(
                 x=lp_x, y=lp_y,
                 width=legend_panel_width,
                 height=legend_panel_height,
             )
+            total_width = lp_x + legend_panel_width + self._padding
 
-        legend_bottom = 0.0
-        if legend_panel_rect is not None:
-            legend_bottom = legend_panel_rect.y + legend_panel_rect.height
-        total_height = max(heatmap_bottom, legend_bottom) + self._padding
+        total_height = heatmap_bottom + self._padding
 
         # Compute secondary gap indices: positions where gap < max gap size
         row_secondary = self._secondary_gap_indices(row_gap_sizes)

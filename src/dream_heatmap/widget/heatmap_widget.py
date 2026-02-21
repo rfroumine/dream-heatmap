@@ -285,7 +285,11 @@ class HeatmapWidget(_BaseWidget):
         legends: list[dict] | None = None,
         color_bar_title: str | None = None,
     ) -> None:
-        """Push updated data to JS (e.g., after zoom or reorder)."""
+        """Push updated data to JS (e.g., after zoom or reorder).
+
+        Uses hold_sync() to batch all trait changes into a single comm
+        message, preventing intermediate renders with mismatched data.
+        """
         config_extra = {}
         if dendrograms is not None:
             config_extra["dendrograms"] = dendrograms
@@ -298,16 +302,17 @@ class HeatmapWidget(_BaseWidget):
         if color_bar_title is not None:
             config_extra["colorBarTitle"] = color_bar_title
 
-        self.matrix_bytes = serialize_matrix(matrix)
-        self.color_lut = serialize_color_lut(color_scale)
-        self.layout_json = serialize_layout(layout)
-        self.id_mappers_json = serialize_id_mappers(row_mapper, col_mapper)
-        self.config_json = serialize_config(
-            vmin=color_scale.vmin,
-            vmax=color_scale.vmax,
-            nan_color=color_scale.nan_color,
-            cmap_name=color_scale.cmap_name,
-            **config_extra,
-        )
+        with self.hold_sync():
+            self.matrix_bytes = serialize_matrix(matrix)
+            self.color_lut = serialize_color_lut(color_scale)
+            self.layout_json = serialize_layout(layout)
+            self.id_mappers_json = serialize_id_mappers(row_mapper, col_mapper)
+            self.config_json = serialize_config(
+                vmin=color_scale.vmin,
+                vmax=color_scale.vmax,
+                nan_color=color_scale.nan_color,
+                cmap_name=color_scale.cmap_name,
+                **config_extra,
+            )
         self._row_mapper = row_mapper
         self._col_mapper = col_mapper

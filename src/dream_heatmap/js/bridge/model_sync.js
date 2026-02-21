@@ -58,11 +58,24 @@ class ModelSync {
 
   /**
    * Register a callback for when any data trait changes.
+   * Uses requestAnimationFrame to coalesce rapid property updates
+   * (e.g. during zoom) into a single render, preventing intermediate
+   * renders with mismatched matrix/layout dimensions.
    * @param {function} callback
    */
   onChange(callback) {
+    var rafPending = false;
+    var debounced = function() {
+      if (!rafPending) {
+        rafPending = true;
+        requestAnimationFrame(function() {
+          rafPending = false;
+          callback();
+        });
+      }
+    };
     for (const trait of ["matrix_bytes", "color_lut", "layout_json", "id_mappers_json", "config_json"]) {
-      this._model.on(`change:${trait}`, callback);
+      this._model.on(`change:${trait}`, debounced);
     }
   }
 }

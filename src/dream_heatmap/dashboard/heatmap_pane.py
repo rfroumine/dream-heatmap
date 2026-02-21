@@ -143,7 +143,7 @@ export function render({ model, el }) {
   const selectionHandler = new SelectionHandler(svg, svgOverlay, sync, hoverHandler);
   const dendroClickHandler = new DendrogramClickHandler(svgOverlay, sync);
   const viewport = new Viewport();
-  const zoomHandler = new ZoomHandler(svg, sync, viewport);
+  const zoomHandler = new ZoomHandler(svg, sync, viewport, svgOverlay);
   selectionHandler.setZoomHandler(zoomHandler);
   dendroClickHandler.setZoomHandler(zoomHandler);
 
