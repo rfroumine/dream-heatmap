@@ -7,7 +7,6 @@ import traceback
 from typing import Any
 
 import param
-import numpy as np
 import pandas as pd
 
 from ..api import Heatmap
@@ -34,9 +33,15 @@ class DashboardState(param.Parameterized):
     vmin = param.Number(default=None, allow_None=True)
     vmax = param.Number(default=None, allow_None=True)
 
+    # --- Value scaling ---
+    scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
+    scale_axis = param.String(default="row")       # "row" or "column"
+
     # --- Splits ---
     split_rows_by = param.String(default="")
     split_cols_by = param.String(default="")
+    split_rows_by_2 = param.String(default="")
+    split_cols_by_2 = param.String(default="")
 
     # --- Clustering ---
     cluster_rows = param.Boolean(default=False)
@@ -47,10 +52,18 @@ class DashboardState(param.Parameterized):
     # --- Ordering ---
     order_rows_by = param.String(default="")
     order_cols_by = param.String(default="")
+    order_rows_by_2 = param.String(default="")
+    order_cols_by_2 = param.String(default="")
 
     # --- Labels ---
     row_labels = param.String(default="auto")
     col_labels = param.String(default="auto")
+    row_label_side = param.String(default="right")
+    col_label_side = param.String(default="bottom")
+
+    # --- Dendrogram visibility ---
+    show_row_dendro = param.Boolean(default=True)
+    show_col_dendro = param.Boolean(default=True)
 
     # --- Annotations (list of config dicts) ---
     annotations = param.List(default=[])
@@ -62,11 +75,21 @@ class DashboardState(param.Parameterized):
     # --- Chart configs (list of dicts) ---
     chart_configs = param.List(default=[])
 
+    # --- Status text ---
+    _status_text = param.String(default="")
+
     # --- Internal: reference to HeatmapPane (set by app) ---
     _heatmap_pane = param.Parameter(default=None, allow_None=True)
 
     # --- Internal: last built Heatmap (for selection resolution) ---
     _current_hm = param.Parameter(default=None, allow_None=True)
+
+    def __init__(self, **params):
+        super().__init__(**params)
+        # Cluster cache
+        self._cluster_cache_key = None
+        self._cached_row_cluster = None  # (cluster_results, mapper)
+        self._cached_col_cluster = None  # (cluster_results, mapper)
 
     def get_row_metadata_columns(self) -> list[str]:
         """Return available row metadata column names."""
@@ -86,14 +109,31 @@ class DashboardState(param.Parameterized):
             return list(self.data.index)
         return []
 
+    def get_row_metadata_categorical_columns(self) -> list[str]:
+        """Return row metadata columns that are categorical/string."""
+        if self.row_metadata is None:
+            return []
+        return [
+            col for col in self.row_metadata.columns
+            if not pd.api.types.is_numeric_dtype(self.row_metadata[col])
+        ]
+
+    def get_row_metadata_numeric_columns(self) -> list[str]:
+        """Return row metadata columns that are numeric."""
+        if self.row_metadata is None:
+            return []
+        return [
+            col for col in self.row_metadata.columns
+            if pd.api.types.is_numeric_dtype(self.row_metadata[col])
+        ]
+
     def get_col_metadata_categorical_columns(self) -> list[str]:
         """Return col metadata columns that are categorical/string."""
         if self.col_metadata is None:
             return []
         return [
             col for col in self.col_metadata.columns
-            if self.col_metadata[col].dtype == "object"
-            or self.col_metadata[col].dtype.name == "category"
+            if not pd.api.types.is_numeric_dtype(self.col_metadata[col])
         ]
 
     def get_col_metadata_numeric_columns(self) -> list[str]:
@@ -102,15 +142,18 @@ class DashboardState(param.Parameterized):
             return []
         return [
             col for col in self.col_metadata.columns
-            if np.issubdtype(self.col_metadata[col].dtype, np.number)
+            if pd.api.types.is_numeric_dtype(self.col_metadata[col])
         ]
 
     @param.depends(
         "colormap", "vmin", "vmax",
-        "split_rows_by", "split_cols_by",
+        "scale_method", "scale_axis",
         "cluster_rows", "cluster_cols", "cluster_method", "cluster_metric",
         "order_rows_by", "order_cols_by",
+        "order_rows_by_2", "order_cols_by_2",
         "row_labels", "col_labels",
+        "row_label_side", "col_label_side",
+        "show_row_dendro", "show_col_dendro",
         "annotations",
         watch=True,
     )
@@ -119,8 +162,16 @@ class DashboardState(param.Parameterized):
         if self.data is None or self._heatmap_pane is None:
             return
 
+        self._status_text = "Building..."
+
         try:
-            hm = Heatmap(self.data)
+            # Apply value scaling
+            from ..transform.scaler import apply_scaling
+
+            axis_int = 1 if self.scale_axis == "row" else 0
+            scaled_data = apply_scaling(self.data, self.scale_method, axis_int)
+
+            hm = Heatmap(scaled_data)
 
             # Metadata
             if self.row_metadata is not None:
@@ -128,31 +179,81 @@ class DashboardState(param.Parameterized):
             if self.col_metadata is not None:
                 hm.set_col_metadata(self.col_metadata)
 
-            # Color scale
-            hm.set_colormap(self.colormap, vmin=self.vmin, vmax=self.vmax)
+            # Color bar title reflecting scaling
+            scale_labels = {
+                "none": None,
+                "zscore": "Z-score",
+                "center": "Centered",
+                "minmax": "Min-Max [0,1]",
+            }
+            axis_label = "row" if self.scale_axis == "row" else "column"
+            color_bar_title = scale_labels.get(self.scale_method)
+            if color_bar_title:
+                color_bar_title = f"{color_bar_title} ({axis_label}-wise)"
 
-            # Splits (empty string = no split)
-            if self.split_rows_by:
-                hm.split_rows(by=self.split_rows_by)
-            if self.split_cols_by:
-                hm.split_cols(by=self.split_cols_by)
+            # Color scale
+            hm.set_colormap(
+                self.colormap, vmin=self.vmin, vmax=self.vmax,
+                color_bar_title=color_bar_title,
+            )
+
+            # Derive splits from annotation split flags
+            row_splits = [
+                cfg["column"] for cfg in self.annotations
+                if cfg.get("split") and cfg["edge"] in ("left", "right")
+            ][:2]
+            col_splits = [
+                cfg["column"] for cfg in self.annotations
+                if cfg.get("split") and cfg["edge"] in ("top", "bottom")
+            ][:2]
+
+            # Apply splits
+            if row_splits:
+                hm.split_rows(by=row_splits if len(row_splits) > 1 else row_splits[0])
+            if col_splits:
+                hm.split_cols(by=col_splits if len(col_splits) > 1 else col_splits[0])
+
+            # Cluster cache key (uses derived split columns)
+            cache_key = (
+                row_splits[0] if len(row_splits) >= 1 else "",
+                row_splits[1] if len(row_splits) >= 2 else "",
+                col_splits[0] if len(col_splits) >= 1 else "",
+                col_splits[1] if len(col_splits) >= 2 else "",
+                self.cluster_method, self.cluster_metric,
+            )
+            use_cache = (cache_key == self._cluster_cache_key)
 
             # Clustering vs ordering (mutually exclusive per axis)
             if self.cluster_rows:
-                hm.cluster_rows(
-                    method=self.cluster_method,
-                    metric=self.cluster_metric,
-                )
+                if use_cache and self._cached_row_cluster is not None:
+                    # Restore cached cluster results + mapper
+                    hm._row_cluster, hm._row_mapper = self._cached_row_cluster
+                else:
+                    self._status_text = "Clustering rows..."
+                    hm.cluster_rows(
+                        method=self.cluster_method,
+                        metric=self.cluster_metric,
+                    )
+                    self._cached_row_cluster = (hm._row_cluster, hm._row_mapper)
             elif self.order_rows_by:
-                hm.order_rows(by=self.order_rows_by)
+                order_rows = [v for v in [self.order_rows_by, self.order_rows_by_2] if v]
+                hm.order_rows(by=order_rows if len(order_rows) > 1 else order_rows[0])
 
             if self.cluster_cols:
-                hm.cluster_cols(
-                    method=self.cluster_method,
-                    metric=self.cluster_metric,
-                )
+                if use_cache and self._cached_col_cluster is not None:
+                    hm._col_cluster, hm._col_mapper = self._cached_col_cluster
+                else:
+                    self._status_text = "Clustering columns..."
+                    hm.cluster_cols(
+                        method=self.cluster_method,
+                        metric=self.cluster_metric,
+                    )
+                    self._cached_col_cluster = (hm._col_cluster, hm._col_mapper)
             elif self.order_cols_by:
-                hm.order_cols(by=self.order_cols_by)
+                order_cols = [v for v in [self.order_cols_by, self.order_cols_by_2] if v]
+                hm.order_cols(by=order_cols if len(order_cols) > 1 else order_cols[0])
+
+            self._cluster_cache_key = cache_key
 
             # Annotations
             for ann_cfg in self.annotations:
@@ -160,8 +261,17 @@ class DashboardState(param.Parameterized):
                 if annotation is not None:
                     hm.add_annotation(ann_cfg["edge"], annotation)
 
-            # Labels
-            hm.set_label_display(rows=self.row_labels, cols=self.col_labels)
+            # Labels (mode + side)
+            hm.set_label_display(
+                rows=self.row_labels,
+                cols=self.col_labels,
+                row_side=self.row_label_side,
+                col_side=self.col_label_side,
+            )
+
+            # Dendrogram visibility flags
+            hm._show_row_dendro = self.show_row_dendro
+            hm._show_col_dendro = self.show_col_dendro
 
             # Compute layout and push to pane
             hm._compute_layout()
@@ -182,6 +292,8 @@ class DashboardState(param.Parameterized):
 
         except Exception:
             traceback.print_exc()
+        finally:
+            self._status_text = ""
 
     def _build_annotation(self, cfg: dict) -> Any:
         """Build an AnnotationTrack from a config dict."""
@@ -200,17 +312,17 @@ class DashboardState(param.Parameterized):
             if metadata is None or column not in metadata.columns:
                 return None
             values = metadata[column]
-            return CategoricalAnnotation(values, name=column)
+            return CategoricalAnnotation(name=column, values=values)
 
         elif ann_type == "bar":
             # For bar charts: use metadata numeric cols or expression row
             if metadata is not None and column in metadata.columns:
                 values = metadata[column]
-                return BarChartAnnotation(values, name=column)
+                return BarChartAnnotation(name=column, values=values)
             # Check expression matrix rows (markers)
             if self.data is not None and column in self.data.index:
                 values = self.data.loc[column]
-                return BarChartAnnotation(values, name=column)
+                return BarChartAnnotation(name=column, values=values)
             return None
 
         return None
@@ -252,14 +364,28 @@ class DashboardState(param.Parameterized):
                     zoomed_row.visual_order, zoomed_col.visual_order,
                 )
 
+            # Remap gap sizes for zoomed coordinate space
+            if zoom_range is not None:
+                zoomed_row_gap_sizes = Heatmap._remap_gap_sizes(
+                    hm._row_gap_sizes,
+                    zoom_range["row_start"], zoom_range["row_end"],
+                )
+                zoomed_col_gap_sizes = Heatmap._remap_gap_sizes(
+                    hm._col_gap_sizes,
+                    zoom_range["col_start"], zoom_range["col_end"],
+                )
+            else:
+                zoomed_row_gap_sizes = hm._row_gap_sizes
+                zoomed_col_gap_sizes = hm._col_gap_sizes
+
             # Recompute layout for zoomed view
             legend_w, legend_h = hm._estimate_legend_dimensions()
-            row_lbl_w, col_lbl_h = hm._estimate_label_space(zoomed_row, zoomed_col)
+            left_lbl_w, right_lbl_w, top_lbl_h, bottom_lbl_h = hm._estimate_label_space(zoomed_row, zoomed_col)
             zoomed_layout = hm._layout_composer.compute(
                 zoomed_row,
                 zoomed_col,
-                has_row_dendro=hm._row_cluster is not None,
-                has_col_dendro=hm._col_cluster is not None,
+                has_row_dendro=(hm._row_cluster is not None and hm._show_row_dendro),
+                has_col_dendro=(hm._col_cluster is not None and hm._show_col_dendro),
                 left_annotation_width=AnnotationLayoutEngine.total_edge_width(
                     hm._annotations["left"]
                 ),
@@ -274,8 +400,12 @@ class DashboardState(param.Parameterized):
                 ),
                 legend_panel_width=legend_w,
                 legend_panel_height=legend_h,
-                row_label_width=row_lbl_w,
-                col_label_height=col_lbl_h,
+                left_label_width=left_lbl_w,
+                right_label_width=right_lbl_w,
+                top_label_height=top_lbl_h,
+                bottom_label_height=bottom_lbl_h,
+                row_gap_sizes=zoomed_row_gap_sizes,
+                col_gap_sizes=zoomed_col_gap_sizes,
             )
 
             # Rebuild annotations and labels for zoomed mappers

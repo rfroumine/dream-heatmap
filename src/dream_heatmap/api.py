@@ -41,6 +41,9 @@ class Heatmap:
         hm.on_select(lambda rows, cols: print(rows, cols))
     """
 
+    PRIMARY_GAP_PX = 8.0
+    SECONDARY_GAP_PX = 3.0
+
     def __init__(self, data: pd.DataFrame) -> None:
         self._matrix = MatrixData(data)
         self._row_metadata: MetadataFrame | None = None
@@ -68,6 +71,12 @@ class Heatmap:
         # Label display mode
         self._row_label_mode: str = "auto"
         self._col_label_mode: str = "auto"
+        self._row_label_side: str = "right"
+        self._col_label_side: str = "bottom"
+
+        # Dendrogram visibility (used by dashboard to hide dendrograms)
+        self._show_row_dendro: bool = True
+        self._show_col_dendro: bool = True
 
         # Layout
         self._layout_composer = LayoutComposer()
@@ -78,6 +87,10 @@ class Heatmap:
 
         # Color bar title
         self._color_bar_title: str | None = None
+
+        # Per-gap sizing for hierarchical splits (set by dashboard)
+        self._row_gap_sizes: dict[int, float] | None = None
+        self._col_gap_sizes: dict[int, float] | None = None
 
         # Widget reference (created on show())
         self._widget = None
@@ -154,6 +167,8 @@ class Heatmap:
             axis_name="row",
         )
         self._row_mapper = self._row_mapper.apply_splits(split_assignments)
+        if isinstance(by, list) and len(by) >= 2:
+            self._row_gap_sizes = self._compute_gap_sizes(self._row_mapper)
         return self
 
     def split_cols(
@@ -181,6 +196,8 @@ class Heatmap:
             axis_name="col",
         )
         self._col_mapper = self._col_mapper.apply_splits(split_assignments)
+        if isinstance(by, list) and len(by) >= 2:
+            self._col_gap_sizes = self._compute_gap_sizes(self._col_mapper)
         return self
 
     # --- Clustering ---
@@ -360,6 +377,8 @@ class Heatmap:
         self,
         rows: str = "auto",
         cols: str = "auto",
+        row_side: str | None = None,
+        col_side: str | None = None,
     ) -> Heatmap:
         """Control row/column label display.
 
@@ -369,6 +388,10 @@ class Heatmap:
             'all', 'auto', or 'none'.
         cols : str
             'all', 'auto', or 'none'.
+        row_side : str, optional
+            'left' or 'right' (default 'right').
+        col_side : str, optional
+            'top' or 'bottom' (default 'bottom').
         """
         valid = {"all", "auto", "none"}
         if rows not in valid:
@@ -377,6 +400,14 @@ class Heatmap:
             raise ValueError(f"cols must be one of {valid}, got '{cols}'")
         self._row_label_mode = rows
         self._col_label_mode = cols
+        if row_side is not None:
+            if row_side not in ("left", "right"):
+                raise ValueError(f"row_side must be 'left' or 'right', got '{row_side}'")
+            self._row_label_side = row_side
+        if col_side is not None:
+            if col_side not in ("top", "bottom"):
+                raise ValueError(f"col_side must be 'top' or 'bottom', got '{col_side}'")
+            self._col_label_side = col_side
         return self
 
     # --- Concatenation ---
@@ -470,6 +501,20 @@ class Heatmap:
 
     # --- Zoom ---
 
+    @staticmethod
+    def _remap_gap_sizes(
+        gap_sizes: dict[int, float] | None, start: int, end: int,
+    ) -> dict[int, float] | None:
+        """Remap gap_sizes keys from original to zoomed coordinate space."""
+        if gap_sizes is None:
+            return None
+        remapped = {
+            g - start: size
+            for g, size in gap_sizes.items()
+            if start < g < end
+        }
+        return remapped if remapped else None
+
     def _handle_zoom(self, zoom_range: dict | None) -> None:
         """Handle zoom events from JS. Recomputes layout with zoomed mappers."""
         if self._widget is None:
@@ -491,14 +536,28 @@ class Heatmap:
                 zoomed_row.visual_order, zoomed_col.visual_order,
             )
 
+        # Remap gap sizes for zoomed coordinate space
+        if zoom_range is not None:
+            zoomed_row_gap_sizes = Heatmap._remap_gap_sizes(
+                self._row_gap_sizes,
+                zoom_range["row_start"], zoom_range["row_end"],
+            )
+            zoomed_col_gap_sizes = Heatmap._remap_gap_sizes(
+                self._col_gap_sizes,
+                zoom_range["col_start"], zoom_range["col_end"],
+            )
+        else:
+            zoomed_row_gap_sizes = self._row_gap_sizes
+            zoomed_col_gap_sizes = self._col_gap_sizes
+
         # Recompute layout for zoomed view (legends persist during zoom)
         legend_w, legend_h = self._estimate_legend_dimensions()
-        row_lbl_w, col_lbl_h = self._estimate_label_space(zoomed_row, zoomed_col)
+        left_lbl_w, right_lbl_w, top_lbl_h, bottom_lbl_h = self._estimate_label_space(zoomed_row, zoomed_col)
         zoomed_layout = self._layout_composer.compute(
             zoomed_row,
             zoomed_col,
-            has_row_dendro=self._row_cluster is not None,
-            has_col_dendro=self._col_cluster is not None,
+            has_row_dendro=(self._row_cluster is not None and self._show_row_dendro),
+            has_col_dendro=(self._col_cluster is not None and self._show_col_dendro),
             left_annotation_width=AnnotationLayoutEngine.total_edge_width(
                 self._annotations["left"]
             ),
@@ -513,8 +572,12 @@ class Heatmap:
             ),
             legend_panel_width=legend_w,
             legend_panel_height=legend_h,
-            row_label_width=row_lbl_w,
-            col_label_height=col_lbl_h,
+            left_label_width=left_lbl_w,
+            right_label_width=right_lbl_w,
+            top_label_height=top_lbl_h,
+            bottom_label_height=bottom_lbl_h,
+            row_gap_sizes=zoomed_row_gap_sizes,
+            col_gap_sizes=zoomed_col_gap_sizes,
         )
 
         # Rebuild annotations and labels for zoomed mappers
@@ -542,6 +605,29 @@ class Heatmap:
         )
 
     # --- Internal ---
+
+    def _compute_gap_sizes(self, mapper: IDMapper) -> dict[int, float] | None:
+        """Build {gap_position: gap_px} for hierarchical (2-level) splits.
+
+        Primary-level boundaries (first value in "val1|val2" group name changes)
+        get wider gaps; secondary boundaries get narrower gaps.
+        """
+        groups = mapper.groups
+        if not groups:
+            return None
+        gap_sizes: dict[int, float] = {}
+        running = 0
+        prev_primary = None
+        for group in groups:
+            if running > 0:
+                current_primary = group.name.split("|")[0]
+                if current_primary != prev_primary:
+                    gap_sizes[running] = self.PRIMARY_GAP_PX
+                else:
+                    gap_sizes[running] = self.SECONDARY_GAP_PX
+            prev_primary = group.name.split("|")[0]
+            running += len(group.ids)
+        return gap_sizes if gap_sizes else None
 
     def _resolve_split(
         self,
@@ -628,12 +714,12 @@ class Heatmap:
     def _compute_layout(self) -> None:
         """Compute layout from current state."""
         legend_w, legend_h = self._estimate_legend_dimensions()
-        row_lbl_w, col_lbl_h = self._estimate_label_space()
+        left_lbl_w, right_lbl_w, top_lbl_h, bottom_lbl_h = self._estimate_label_space()
         self._layout = self._layout_composer.compute(
             self._row_mapper,
             self._col_mapper,
-            has_row_dendro=self._row_cluster is not None,
-            has_col_dendro=self._col_cluster is not None,
+            has_row_dendro=(self._row_cluster is not None and self._show_row_dendro),
+            has_col_dendro=(self._col_cluster is not None and self._show_col_dendro),
             left_annotation_width=AnnotationLayoutEngine.total_edge_width(
                 self._annotations["left"]
             ),
@@ -648,8 +734,12 @@ class Heatmap:
             ),
             legend_panel_width=legend_w,
             legend_panel_height=legend_h,
-            row_label_width=row_lbl_w,
-            col_label_height=col_lbl_h,
+            left_label_width=left_lbl_w,
+            right_label_width=right_lbl_w,
+            top_label_height=top_lbl_h,
+            bottom_label_height=bottom_lbl_h,
+            row_gap_sizes=self._row_gap_sizes,
+            col_gap_sizes=self._col_gap_sizes,
         )
 
     def _build_dendrogram_data(self) -> dict | None:
@@ -659,7 +749,7 @@ class Heatmap:
 
         result: dict = {}
 
-        if self._row_cluster is not None and self._layout is not None:
+        if self._row_cluster is not None and self._show_row_dendro and self._layout is not None:
             row_specs = self._build_axis_dendrograms(
                 self._row_cluster, self._row_mapper,
                 self._layout.row_cell_layout, "left",
@@ -676,7 +766,7 @@ class Heatmap:
                     "extent": self._layout.row_dendro_width,
                 }
 
-        if self._col_cluster is not None and self._layout is not None:
+        if self._col_cluster is not None and self._show_col_dendro and self._layout is not None:
             col_specs = self._build_axis_dendrograms(
                 self._col_cluster, self._col_mapper,
                 self._layout.col_cell_layout, "top",
@@ -788,7 +878,7 @@ class Heatmap:
             )
             result["row"] = {
                 "labels": LabelLayoutEngine.serialize(row_labels, font_size=font_size),
-                "side": "right",
+                "side": self._row_label_side,
             }
 
         if self._col_label_mode != "none":
@@ -800,7 +890,7 @@ class Heatmap:
             )
             result["col"] = {
                 "labels": LabelLayoutEngine.serialize(col_labels, font_size=font_size),
-                "side": "bottom",
+                "side": self._col_label_side,
             }
 
         return result if result else None
@@ -837,10 +927,11 @@ class Heatmap:
         self,
         row_mapper: IDMapper | None = None,
         col_mapper: IDMapper | None = None,
-    ) -> tuple[float, float]:
+    ) -> tuple[float, float, float, float]:
         """Estimate extra space needed for row and column labels.
 
-        Returns (row_label_width, col_label_height).
+        Returns (left_label_w, right_label_w, top_label_h, bottom_label_h).
+        Only the relevant side gets non-zero size based on label side setting.
         """
         char_width = 6.5
         rm = row_mapper or self._row_mapper
@@ -856,7 +947,12 @@ class Heatmap:
             max_len = max(len(str(cid)) for cid in cm.visual_order)
             col_label_height = max_len * char_width * math.sin(math.radians(45)) + 10
 
-        return row_label_width, col_label_height
+        left_label_w = row_label_width if self._row_label_side == "left" else 0.0
+        right_label_w = row_label_width if self._row_label_side == "right" else 0.0
+        top_label_h = col_label_height if self._col_label_side == "top" else 0.0
+        bottom_label_h = col_label_height if self._col_label_side == "bottom" else 0.0
+
+        return left_label_w, right_label_w, top_label_h, bottom_label_h
 
     def _estimate_legend_dimensions(self) -> tuple[float, float]:
         """Estimate the pixel width and height needed for the legend panel.

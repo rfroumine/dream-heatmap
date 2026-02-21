@@ -45,11 +45,17 @@ class LayoutSpec:
     has_color_bar: bool = True
 
     # Annotation edge sizes (so JS can offset labels past annotations)
+    left_annotation_width: float = 0.0
     right_annotation_width: float = 0.0
+    top_annotation_height: float = 0.0
     bottom_annotation_height: float = 0.0
 
     # Legend panel
     legend_panel_rect: Rect | None = None
+
+    # Secondary gap indices (gaps smaller than primary — should be bridged in annotations)
+    row_secondary_gap_indices: list[int] = field(default_factory=list)
+    col_secondary_gap_indices: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize to a dict for JSON transfer to JS."""
@@ -66,11 +72,17 @@ class LayoutSpec:
             "rowDendroWidth": self.row_dendro_width,
             "colDendroHeight": self.col_dendro_height,
             "hasColorBar": self.has_color_bar,
+            "leftAnnotationWidth": self.left_annotation_width,
             "rightAnnotationWidth": self.right_annotation_width,
+            "topAnnotationHeight": self.top_annotation_height,
             "bottomAnnotationHeight": self.bottom_annotation_height,
         }
         if self.legend_panel_rect is not None:
             d["legendPanel"] = self.legend_panel_rect.to_dict()
+        if self.row_secondary_gap_indices:
+            d["rowSecondaryGaps"] = self.row_secondary_gap_indices
+        if self.col_secondary_gap_indices:
+            d["colSecondaryGaps"] = self.col_secondary_gap_indices
         return d
 
 
@@ -108,10 +120,24 @@ class LayoutComposer:
         bottom_annotation_height: float = 0.0,
         legend_panel_width: float = 0.0,
         legend_panel_height: float = 0.0,
-        row_label_width: float = 0.0,
-        col_label_height: float = 0.0,
+        left_label_width: float = 0.0,
+        right_label_width: float = 0.0,
+        top_label_height: float = 0.0,
+        bottom_label_height: float = 0.0,
+        # Per-gap sizing for hierarchical splits
+        row_gap_sizes: dict[int, float] | None = None,
+        col_gap_sizes: dict[int, float] | None = None,
+        # Legacy compat: if callers still pass row_label_width/col_label_height
+        row_label_width: float | None = None,
+        col_label_height: float | None = None,
     ) -> LayoutSpec:
         """Compute the layout for the given row/col ID mappers."""
+        # Legacy fallback: old callers may still pass row_label_width / col_label_height
+        if row_label_width is not None and right_label_width == 0.0:
+            right_label_width = row_label_width
+        if col_label_height is not None and bottom_label_height == 0.0:
+            bottom_label_height = col_label_height
+
         row_dendro_w = self._dendro_height if has_row_dendro else 0.0
         col_dendro_h = self._dendro_height if has_col_dendro else 0.0
 
@@ -124,22 +150,36 @@ class LayoutComposer:
             + row_dendro_w
             + left_annotation_width
             + right_annotation_width
-            + row_label_width
+            + left_label_width
+            + right_label_width
         )
         fixed_height = (
             self._padding * 2
             + col_dendro_h
             + top_annotation_height
             + bottom_annotation_height
-            + col_label_height
+            + top_label_height
+            + bottom_label_height
         )
         # Legend panel sits below the heatmap
         if legend_panel_height > 0:
             fixed_height += legend_panel_height + 16.0  # 16 = legend_gap
 
-        # Gap pixel totals
-        col_gap_total = len(col_mapper.gap_positions) * self._gap_size
-        row_gap_total = len(row_mapper.gap_positions) * self._gap_size
+        # Gap pixel totals (use per-gap sizes if provided)
+        if col_gap_sizes:
+            col_gap_total = sum(
+                col_gap_sizes.get(p, self._gap_size)
+                for p in col_mapper.gap_positions
+            )
+        else:
+            col_gap_total = len(col_mapper.gap_positions) * self._gap_size
+        if row_gap_sizes:
+            row_gap_total = sum(
+                row_gap_sizes.get(p, self._gap_size)
+                for p in row_mapper.gap_positions
+            )
+        else:
+            row_gap_total = len(row_mapper.gap_positions) * self._gap_size
 
         # Budget-based cell sizes (independent per axis)
         if n_cols > 0:
@@ -154,9 +194,9 @@ class LayoutComposer:
         col_cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, col_cell_size))
         row_cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, row_cell_size))
 
-        # Heatmap origin shifts right/down for dendrograms + left/top annotations
-        heatmap_x = self._padding + row_dendro_w + left_annotation_width
-        heatmap_y = self._padding + col_dendro_h + top_annotation_height
+        # Heatmap origin shifts right/down for dendrograms + left annotations + left labels
+        heatmap_x = self._padding + row_dendro_w + left_annotation_width + left_label_width
+        heatmap_y = self._padding + col_dendro_h + top_annotation_height + top_label_height
 
         row_layout = CellLayout(
             n_cells=n_rows,
@@ -164,6 +204,7 @@ class LayoutComposer:
             gap_positions=row_mapper.gap_positions,
             gap_size=self._gap_size,
             offset=heatmap_y,
+            gap_sizes=row_gap_sizes,
         )
         col_layout = CellLayout(
             n_cells=n_cols,
@@ -171,6 +212,7 @@ class LayoutComposer:
             gap_positions=col_mapper.gap_positions,
             gap_size=self._gap_size,
             offset=heatmap_x,
+            gap_sizes=col_gap_sizes,
         )
 
         heatmap_rect = Rect(
@@ -180,13 +222,12 @@ class LayoutComposer:
             height=row_layout.total_size,
         )
 
-        # No right-side color bar — color bar is now in the legend panel below
         legend_panel_rect = None
 
-        total_width = heatmap_x + col_layout.total_size + right_annotation_width + row_label_width + self._padding
+        total_width = heatmap_x + col_layout.total_size + right_annotation_width + right_label_width + self._padding
 
         # Total height accounts for col labels and legend panel below heatmap
-        heatmap_bottom = heatmap_y + row_layout.total_size + bottom_annotation_height + col_label_height
+        heatmap_bottom = heatmap_y + row_layout.total_size + bottom_annotation_height + bottom_label_height
 
         # Legend panel below the heatmap area
         if legend_panel_height > 0 and legend_panel_width > 0:
@@ -204,6 +245,10 @@ class LayoutComposer:
             legend_bottom = legend_panel_rect.y + legend_panel_rect.height
         total_height = max(heatmap_bottom, legend_bottom) + self._padding
 
+        # Compute secondary gap indices: positions where gap < max gap size
+        row_secondary = self._secondary_gap_indices(row_gap_sizes)
+        col_secondary = self._secondary_gap_indices(col_gap_sizes)
+
         return LayoutSpec(
             heatmap_rect=heatmap_rect,
             row_cell_layout=row_layout,
@@ -215,7 +260,21 @@ class LayoutComposer:
             row_dendro_width=row_dendro_w,
             col_dendro_height=col_dendro_h,
             has_color_bar=True,
+            left_annotation_width=left_annotation_width,
             right_annotation_width=right_annotation_width,
+            top_annotation_height=top_annotation_height,
             bottom_annotation_height=bottom_annotation_height,
             legend_panel_rect=legend_panel_rect,
+            row_secondary_gap_indices=row_secondary,
+            col_secondary_gap_indices=col_secondary,
         )
+
+    @staticmethod
+    def _secondary_gap_indices(
+        gap_sizes: dict[int, float] | None,
+    ) -> list[int]:
+        """Return gap positions whose size is strictly less than the maximum."""
+        if not gap_sizes or len(gap_sizes) <= 1:
+            return []
+        max_size = max(gap_sizes.values())
+        return sorted(pos for pos, size in gap_sizes.items() if size < max_size)

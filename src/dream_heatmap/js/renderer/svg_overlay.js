@@ -417,18 +417,23 @@ class SVGOverlay {
     };
     const trackType = mergedTrack.type;
 
+    // Secondary gaps: positions where annotation rects should bridge the gap
+    const secondaryGaps = new Set(
+      isRow ? (layout.rowSecondaryGaps || []) : (layout.colSecondaryGaps || [])
+    );
+
     if (trackType === "categorical") {
-      this._renderCategorical(mergedTrack, edge, positions, cellSize, heatmap);
+      this._renderCategorical(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     } else if (trackType === "bar") {
-      this._renderBar(mergedTrack, edge, positions, cellSize, heatmap);
+      this._renderBar(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     } else if (trackType === "sparkline") {
-      this._renderSparkline(mergedTrack, edge, positions, cellSize, heatmap);
+      this._renderSparkline(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     } else if (trackType === "boxplot") {
-      this._renderBoxPlot(mergedTrack, edge, positions, cellSize, heatmap);
+      this._renderBoxPlot(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     } else if (trackType === "violin") {
-      this._renderViolin(mergedTrack, edge, positions, cellSize, heatmap);
+      this._renderViolin(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     } else if (trackType === "label") {
-      this._renderLabelTrack(mergedTrack, edge, positions, cellSize, heatmap);
+      this._renderLabelTrack(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     }
   }
 
@@ -439,7 +444,7 @@ class SVGOverlay {
     if (edge === "bottom")return { x: heatmap.x, y: heatmap.y + heatmap.height + offset, w: heatmap.width, h: trackWidth };
   }
 
-  _renderCategorical(track, edge, positions, cellSize, heatmap) {
+  _renderCategorical(track, edge, positions, cellSize, heatmap, secondaryGaps) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
     const catLabels = track.cellLabels || [];
@@ -448,10 +453,15 @@ class SVGOverlay {
       const color = track.cellColors[i];
       const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       let rx, ry, rw, rh;
+      // Bridge secondary gaps: extend rect to cover the gap to the next cell
+      let extraSize = 0;
+      if (secondaryGaps && secondaryGaps.has(i + 1) && i + 1 < positions.length) {
+        extraSize = positions[i + 1] - (positions[i] + cellSize);
+      }
       if (isRow) {
-        rx = area.x; ry = positions[i]; rw = area.w; rh = cellSize;
+        rx = area.x; ry = positions[i]; rw = area.w; rh = cellSize + extraSize;
       } else {
-        rx = positions[i]; ry = area.y; rw = cellSize; rh = area.h;
+        rx = positions[i]; ry = area.y; rw = cellSize + extraSize; rh = area.h;
       }
       rect.setAttribute("x", rx);
       rect.setAttribute("y", ry);
@@ -551,7 +561,7 @@ class SVGOverlay {
     return lum > 150 ? "#333" : "#fff";
   }
 
-  _renderBar(track, edge, positions, cellSize, heatmap) {
+  _renderBar(track, edge, positions, cellSize, heatmap, secondaryGaps) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
     const range = track.vmax - track.vmin || 1;
@@ -563,17 +573,23 @@ class SVGOverlay {
       const rect = document.createElementNS(ns, "rect");
       rect.setAttribute("rx", "1");
 
+      // Bridge secondary gaps
+      let extraSize = 0;
+      if (secondaryGaps && secondaryGaps.has(i + 1) && i + 1 < positions.length) {
+        extraSize = positions[i + 1] - (positions[i] + cellSize);
+      }
+
       if (isRow) {
         const barW = norm * area.w;
         rect.setAttribute("x", edge === "left" ? area.x + area.w - barW : area.x);
         rect.setAttribute("y", positions[i]);
         rect.setAttribute("width", barW);
-        rect.setAttribute("height", cellSize);
+        rect.setAttribute("height", cellSize + extraSize);
       } else {
         const barH = norm * area.h;
         rect.setAttribute("x", positions[i]);
         rect.setAttribute("y", edge === "top" ? area.y + area.h - barH : area.y);
-        rect.setAttribute("width", cellSize);
+        rect.setAttribute("width", cellSize + extraSize);
         rect.setAttribute("height", barH);
       }
       rect.setAttribute("fill", track.color);
@@ -586,15 +602,20 @@ class SVGOverlay {
       for (let i = 0; i < track.values.length; i++) {
         const val = track.values[i];
         const hoverRect = document.createElementNS(ns, "rect");
+        // Bridge secondary gaps for hover rects too
+        let hoverExtra = 0;
+        if (secondaryGaps && secondaryGaps.has(i + 1) && i + 1 < positions.length) {
+          hoverExtra = positions[i + 1] - (positions[i] + cellSize);
+        }
         if (isRow) {
           hoverRect.setAttribute("x", area.x);
           hoverRect.setAttribute("y", positions[i]);
           hoverRect.setAttribute("width", area.w);
-          hoverRect.setAttribute("height", cellSize);
+          hoverRect.setAttribute("height", cellSize + hoverExtra);
         } else {
           hoverRect.setAttribute("x", positions[i]);
           hoverRect.setAttribute("y", area.y);
-          hoverRect.setAttribute("width", cellSize);
+          hoverRect.setAttribute("width", cellSize + hoverExtra);
           hoverRect.setAttribute("height", area.h);
         }
         hoverRect.setAttribute("fill", "transparent");
@@ -665,7 +686,7 @@ class SVGOverlay {
     this._annotationGroup.appendChild(maxLabel);
   }
 
-  _renderSparkline(track, edge, positions, cellSize, heatmap) {
+  _renderSparkline(track, edge, positions, cellSize, heatmap, secondaryGaps) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
     const range = track.vmax - track.vmin || 1;
@@ -733,7 +754,7 @@ class SVGOverlay {
     }
   }
 
-  _renderBoxPlot(track, edge, positions, cellSize, heatmap) {
+  _renderBoxPlot(track, edge, positions, cellSize, heatmap, secondaryGaps) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
     const range = track.vmax - track.vmin || 1;
@@ -825,7 +846,7 @@ class SVGOverlay {
     }
   }
 
-  _renderViolin(track, edge, positions, cellSize, heatmap) {
+  _renderViolin(track, edge, positions, cellSize, heatmap, secondaryGaps) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
 
@@ -913,7 +934,7 @@ class SVGOverlay {
     }
   }
 
-  _renderLabelTrack(track, edge, positions, cellSize, heatmap) {
+  _renderLabelTrack(track, edge, positions, cellSize, heatmap, secondaryGaps) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
     const fontSize = track.fontSize || 10;
@@ -1038,11 +1059,18 @@ class SVGOverlay {
     const heatmap = layout.heatmap;
     const font = '"Open Sans", verdana, arial, sans-serif';
     // Offset past annotations so labels don't overlap
+    const leftAnnotW = layout.leftAnnotationWidth || 0;
     const rightAnnotW = layout.rightAnnotationWidth || 0;
+    const topAnnotH = layout.topAnnotationHeight || 0;
     const bottomAnnotH = layout.bottomAnnotationHeight || 0;
 
     if (labels.row && labels.row.labels) {
-      const labelX = heatmap.x + heatmap.width + rightAnnotW + 6;
+      const side = labels.row.side || "right";
+      const labelX = side === "right"
+        ? heatmap.x + heatmap.width + rightAnnotW + 6
+        : heatmap.x - leftAnnotW - 6;
+      const anchor = side === "right" ? "start" : "end";
+
       for (const lbl of labels.row.labels) {
         const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
         text.textContent = lbl.text;
@@ -1051,6 +1079,7 @@ class SVGOverlay {
         text.setAttribute("font-size", lbl.fontSize || 10);
         text.setAttribute("font-family", font);
         text.setAttribute("fill", "#444");
+        text.setAttribute("text-anchor", anchor);
         text.setAttribute("dominant-baseline", "central");
         text.style.pointerEvents = "none";
         if (!lbl.visible) {
@@ -1062,24 +1091,48 @@ class SVGOverlay {
     }
 
     if (labels.col && labels.col.labels) {
-      const labelY = heatmap.y + heatmap.height + bottomAnnotH + 6;
-      for (const lbl of labels.col.labels) {
-        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        text.textContent = lbl.text;
-        text.setAttribute("x", lbl.position);
-        text.setAttribute("y", labelY);
-        text.setAttribute("font-size", lbl.fontSize || 10);
-        text.setAttribute("font-family", font);
-        text.setAttribute("fill", "#444");
-        text.setAttribute("text-anchor", "start");
-        text.setAttribute("dominant-baseline", "hanging");
-        text.setAttribute("transform", `rotate(45, ${lbl.position}, ${labelY})`);
-        text.style.pointerEvents = "none";
-        if (!lbl.visible) {
-          text.classList.add("dh-label-auto-hidden");
-          text.style.display = "none";
+      const side = labels.col.side || "bottom";
+      if (side === "bottom") {
+        const labelY = heatmap.y + heatmap.height + bottomAnnotH + 6;
+        for (const lbl of labels.col.labels) {
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.textContent = lbl.text;
+          text.setAttribute("x", lbl.position);
+          text.setAttribute("y", labelY);
+          text.setAttribute("font-size", lbl.fontSize || 10);
+          text.setAttribute("font-family", font);
+          text.setAttribute("fill", "#444");
+          text.setAttribute("text-anchor", "start");
+          text.setAttribute("dominant-baseline", "hanging");
+          text.setAttribute("transform", `rotate(45, ${lbl.position}, ${labelY})`);
+          text.style.pointerEvents = "none";
+          if (!lbl.visible) {
+            text.classList.add("dh-label-auto-hidden");
+            text.style.display = "none";
+          }
+          this._labelGroup.appendChild(text);
         }
-        this._labelGroup.appendChild(text);
+      } else {
+        // Top labels: rotated above the heatmap
+        const labelY = heatmap.y - topAnnotH - 6;
+        for (const lbl of labels.col.labels) {
+          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          text.textContent = lbl.text;
+          text.setAttribute("x", lbl.position);
+          text.setAttribute("y", labelY);
+          text.setAttribute("font-size", lbl.fontSize || 10);
+          text.setAttribute("font-family", font);
+          text.setAttribute("fill", "#444");
+          text.setAttribute("text-anchor", "end");
+          text.setAttribute("dominant-baseline", "auto");
+          text.setAttribute("transform", `rotate(-45, ${lbl.position}, ${labelY})`);
+          text.style.pointerEvents = "none";
+          if (!lbl.visible) {
+            text.classList.add("dh-label-auto-hidden");
+            text.style.display = "none";
+          }
+          this._labelGroup.appendChild(text);
+        }
       }
     }
 
