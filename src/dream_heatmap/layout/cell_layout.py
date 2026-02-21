@@ -19,12 +19,14 @@ class CellLayout:
         gap_positions: frozenset[int] = frozenset(),
         gap_size: float = 6.0,
         offset: float = 0.0,
+        gap_sizes: dict[int, float] | None = None,
     ) -> None:
         self._n_cells = n_cells
         self._cell_size = cell_size
         self._gap_positions = gap_positions
         self._gap_size = gap_size
         self._offset = offset
+        self._gap_sizes = gap_sizes
         self._positions = self._compute_positions()
 
     def _compute_positions(self) -> np.ndarray:
@@ -33,7 +35,8 @@ class CellLayout:
         current = self._offset
         for i in range(self._n_cells):
             if i in self._gap_positions:
-                current += self._gap_size
+                size = (self._gap_sizes or {}).get(i, self._gap_size)
+                current += size
             positions[i] = current
             current += self._cell_size
         return positions
