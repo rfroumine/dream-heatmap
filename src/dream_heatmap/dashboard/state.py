@@ -37,11 +37,7 @@ class DashboardState(param.Parameterized):
     scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
     scale_axis = param.String(default="row")       # "row" or "column"
 
-    # --- Splits ---
-    split_rows_by = param.String(default="")
-    split_cols_by = param.String(default="")
-    split_rows_by_2 = param.String(default="")
-    split_cols_by_2 = param.String(default="")
+    # (Splits are derived from annotation split flags — no dedicated params needed)
 
     # --- Clustering ---
     cluster_rows = param.Boolean(default=False)
@@ -86,8 +82,9 @@ class DashboardState(param.Parameterized):
 
     def __init__(self, **params):
         super().__init__(**params)
-        # Cluster cache
-        self._cluster_cache_key = None
+        # Per-axis cluster caches (changing row splits won't invalidate col cache)
+        self._row_cluster_cache_key = None
+        self._col_cluster_cache_key = None
         self._cached_row_cluster = None  # (cluster_results, mapper)
         self._cached_col_cluster = None  # (cluster_results, mapper)
 
@@ -213,20 +210,13 @@ class DashboardState(param.Parameterized):
             if col_splits:
                 hm.split_cols(by=col_splits if len(col_splits) > 1 else col_splits[0])
 
-            # Cluster cache key (uses derived split columns)
-            cache_key = (
-                row_splits[0] if len(row_splits) >= 1 else "",
-                row_splits[1] if len(row_splits) >= 2 else "",
-                col_splits[0] if len(col_splits) >= 1 else "",
-                col_splits[1] if len(col_splits) >= 2 else "",
-                self.cluster_method, self.cluster_metric,
-            )
-            use_cache = (cache_key == self._cluster_cache_key)
+            # Per-axis cluster cache keys
+            row_cache_key = (tuple(row_splits), self.cluster_method, self.cluster_metric)
+            col_cache_key = (tuple(col_splits), self.cluster_method, self.cluster_metric)
 
             # Clustering vs ordering (mutually exclusive per axis)
             if self.cluster_rows:
-                if use_cache and self._cached_row_cluster is not None:
-                    # Restore cached cluster results + mapper
+                if row_cache_key == self._row_cluster_cache_key and self._cached_row_cluster is not None:
                     hm._row_cluster, hm._row_mapper = self._cached_row_cluster
                 else:
                     self._status_text = "Clustering rows..."
@@ -240,7 +230,7 @@ class DashboardState(param.Parameterized):
                 hm.order_rows(by=order_rows if len(order_rows) > 1 else order_rows[0])
 
             if self.cluster_cols:
-                if use_cache and self._cached_col_cluster is not None:
+                if col_cache_key == self._col_cluster_cache_key and self._cached_col_cluster is not None:
                     hm._col_cluster, hm._col_mapper = self._cached_col_cluster
                 else:
                     self._status_text = "Clustering columns..."
@@ -253,7 +243,8 @@ class DashboardState(param.Parameterized):
                 order_cols = [v for v in [self.order_cols_by, self.order_cols_by_2] if v]
                 hm.order_cols(by=order_cols if len(order_cols) > 1 else order_cols[0])
 
-            self._cluster_cache_key = cache_key
+            self._row_cluster_cache_key = row_cache_key
+            self._col_cluster_cache_key = col_cache_key
 
             # Annotations
             for ann_cfg in self.annotations:
@@ -289,11 +280,11 @@ class DashboardState(param.Parameterized):
             )
 
             self._current_hm = hm
-
-        except Exception:
-            traceback.print_exc()
-        finally:
             self._status_text = ""
+
+        except Exception as e:
+            traceback.print_exc()
+            self._status_text = f"Error: {e}"
 
     def _build_annotation(self, cfg: dict) -> Any:
         """Build an AnnotationTrack from a config dict."""
