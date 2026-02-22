@@ -72,18 +72,21 @@ _CARD_SHADOW_CSS = """
 # ---------------------------------------------------------------------------
 
 _SECTION_ICONS = {
-    "color": (  # grid with two vertical lines
-        '<rect x="3" y="3" width="14" height="14" rx="2" fill="none"/>'
-        '<line x1="8" y1="3" x2="8" y2="17"/>'
-        '<line x1="12" y1="3" x2="12" y2="17"/>'
+    "color": (  # paint palette
+        '<circle cx="10" cy="10" r="8" fill="none"/>'
+        '<circle cx="7" cy="7" r="1.2" fill="#637381" stroke="none"/>'
+        '<circle cx="11" cy="6" r="1.2" fill="#637381" stroke="none"/>'
+        '<circle cx="14" cy="9" r="1.2" fill="#637381" stroke="none"/>'
+        '<circle cx="7" cy="11" r="1.2" fill="#637381" stroke="none"/>'
     ),
     "labels": (  # three horizontal lines (decreasing width)
         '<line x1="3" y1="6" x2="17" y2="6"/>'
         '<line x1="3" y1="10" x2="14" y2="10"/>'
         '<line x1="3" y1="14" x2="11" y2="14"/>'
     ),
-    "annotations": (  # droplet/pin
-        '<path d="M10 2 C6 6 4 9 4 12a6 6 0 0 0 12 0c0-3-2-6-6-10z" fill="none"/>'
+    "annotations": (  # tag
+        '<path d="M3 3h7l7 7-7 7-7-7V3z" fill="none"/>'
+        '<circle cx="7.5" cy="7.5" r="1.5" fill="#637381" stroke="none"/>'
     ),
     "ordering": (  # up/down arrows
         '<polyline points="6,8 10,3 14,8" fill="none"/>'
@@ -192,25 +195,38 @@ class SidebarControls:
             step=0.1, sizing_mode="stretch_width",
         )
 
-        # Populate vmin/vmax with actual data range if not set
-        if s.vmin is None or s.vmax is None:
-            self._update_color_range_for_scaling()
-
-        # --- Per-axis scaling ---
+        # --- Per-axis scaling (single method, pick axis) ---
         _scale_options = {
             "None": "none",
             "Center & Scale (z-score)": "zscore",
             "Center only": "center",
             "Min-Max [0,1]": "minmax",
         }
-        self.row_scale_method_select = pn.widgets.Select(
-            name="Row Scale", value=s.row_scale_method,
+        # Derive initial values from state
+        if s.row_scale_method != "none":
+            _init_method = s.row_scale_method
+            _init_axis = "Rows"
+        elif s.col_scale_method != "none":
+            _init_method = s.col_scale_method
+            _init_axis = "Columns"
+        else:
+            _init_method = "none"
+            _init_axis = "Rows"
+
+        self.scale_method_select = pn.widgets.Select(
+            name="Scale method", value=_init_method,
             options=_scale_options, sizing_mode="stretch_width",
         )
-        self.col_scale_method_select = pn.widgets.Select(
-            name="Column Scale", value=s.col_scale_method,
-            options=_scale_options, sizing_mode="stretch_width",
+        self.scale_axis_select = pn.widgets.RadioButtonGroup(
+            name="Apply to", value=_init_axis,
+            options=["Rows", "Columns"],
+            visible=(_init_method != "none"),
+            sizing_mode="stretch_width",
         )
+
+        # Populate vmin/vmax with actual data range if not set
+        if s.vmin is None or s.vmax is None:
+            self._update_color_range_for_scaling()
 
         # --- Labels section ---
         self.row_labels_select = pn.widgets.Select(
@@ -384,9 +400,9 @@ class SidebarControls:
             lambda e: self._set_state("vmax", e.new), "value",
         )
 
-        # Per-axis scaling
-        self.row_scale_method_select.param.watch(self._on_scaling_changed, "value")
-        self.col_scale_method_select.param.watch(self._on_scaling_changed, "value")
+        # Per-axis scaling (single method + axis toggle)
+        self.scale_method_select.param.watch(self._on_scaling_changed, "value")
+        self.scale_axis_select.param.watch(self._on_scaling_changed, "value")
 
         # Labels
         self.row_labels_select.param.watch(
@@ -441,8 +457,19 @@ class SidebarControls:
 
     def _on_scaling_changed(self, event) -> None:
         """Handle per-axis scaling change -- single batched rebuild."""
-        row_method = self.row_scale_method_select.value
-        col_method = self.col_scale_method_select.value
+        method = self.scale_method_select.value
+        axis = self.scale_axis_select.value
+
+        # Show/hide axis toggle based on whether a method is selected
+        self.scale_axis_select.visible = (method != "none")
+
+        if method == "none":
+            row_method, col_method = "none", "none"
+        elif axis == "Rows":
+            row_method, col_method = method, "none"
+        else:
+            row_method, col_method = "none", method
+
         new_vmin, new_vmax = self._compute_scaled_range(row_method, col_method)
 
         # Update widgets under guard so their watch callbacks don't fire
@@ -483,9 +510,15 @@ class SidebarControls:
 
     def _update_color_range_for_scaling(self) -> None:
         """Set vmin/vmax widgets from current state. Used at init before watches exist."""
-        new_vmin, new_vmax = self._compute_scaled_range(
-            self.state.row_scale_method, self.state.col_scale_method,
-        )
+        method = self.scale_method_select.value
+        axis = self.scale_axis_select.value
+        if method == "none":
+            row_m, col_m = "none", "none"
+        elif axis == "Rows":
+            row_m, col_m = method, "none"
+        else:
+            row_m, col_m = "none", method
+        new_vmin, new_vmax = self._compute_scaled_range(row_m, col_m)
         self.vmin_input.value = new_vmin
         self.vmax_input.value = new_vmax
 
@@ -799,8 +832,8 @@ class SidebarControls:
             header_row,
 
             _make_section_card("Scale & Colour", pn.Column(
-                self.row_scale_method_select,
-                self.col_scale_method_select,
+                self.scale_method_select,
+                self.scale_axis_select,
                 self.colormap_select,
                 pn.Row(self.vmin_input, self.vmax_input, sizing_mode="stretch_width"),
                 sizing_mode="stretch_width",
