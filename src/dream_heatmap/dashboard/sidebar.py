@@ -35,6 +35,104 @@ ANNOTATION_POSITIONS = ["Before", "After"]
 
 _CLUSTER_SENTINEL = "__cluster__"
 
+# ---------------------------------------------------------------------------
+# Shopify-inspired Card shadow-DOM CSS
+# ---------------------------------------------------------------------------
+
+_CARD_SHADOW_CSS = """
+/* Hide default chevron toggle */
+.card-button { display: none; }
+
+/* Transparent card — no border, no shadow */
+:host {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Header row: rounded, hover highlight */
+.card-header {
+  border-radius: 8px;
+  transition: background-color 0.12s ease;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+.card-header:hover {
+  background-color: #f6f6f7;
+}
+
+/* Card body padding */
+.card-body, .card {
+  padding: 4px 14px 12px 14px;
+}
+"""
+
+# ---------------------------------------------------------------------------
+# Section icons — monoline SVGs (20x20 viewBox, stroke-based)
+# ---------------------------------------------------------------------------
+
+_SECTION_ICONS = {
+    "color": (  # grid with two vertical lines
+        '<rect x="3" y="3" width="14" height="14" rx="2" fill="none"/>'
+        '<line x1="8" y1="3" x2="8" y2="17"/>'
+        '<line x1="12" y1="3" x2="12" y2="17"/>'
+    ),
+    "labels": (  # three horizontal lines (decreasing width)
+        '<line x1="3" y1="6" x2="17" y2="6"/>'
+        '<line x1="3" y1="10" x2="14" y2="10"/>'
+        '<line x1="3" y1="14" x2="11" y2="14"/>'
+    ),
+    "annotations": (  # droplet/pin
+        '<path d="M10 2 C6 6 4 9 4 12a6 6 0 0 0 12 0c0-3-2-6-6-10z" fill="none"/>'
+    ),
+    "ordering": (  # up/down arrows
+        '<polyline points="6,8 10,3 14,8" fill="none"/>'
+        '<polyline points="6,12 10,17 14,12" fill="none"/>'
+    ),
+    "charts": (  # bar chart
+        '<rect x="3" y="10" width="3" height="7" rx="0.5" fill="none"/>'
+        '<rect x="8.5" y="6" width="3" height="11" rx="0.5" fill="none"/>'
+        '<rect x="14" y="3" width="3" height="14" rx="0.5" fill="none"/>'
+    ),
+}
+
+
+def _make_section_card(
+    title: str,
+    content,
+    icon_key: str,
+    collapsed: bool = True,
+) -> pn.Card:
+    """Build a Shopify-style collapsible section card."""
+    svg_path = _SECTION_ICONS.get(icon_key, "")
+    icon_svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" '
+        f'viewBox="0 0 20 20" fill="none" stroke="#637381" stroke-width="1.5" '
+        f'stroke-linecap="round" stroke-linejoin="round" '
+        f'style="flex-shrink:0">{svg_path}</svg>'
+    )
+    header_html = (
+        f'<div style="display:flex;align-items:center;gap:8px">'
+        f'{icon_svg}'
+        f'<span style="font-size:13px;font-weight:500;color:#202223">{title}</span>'
+        f'</div>'
+    )
+    header = pn.pane.HTML(header_html, sizing_mode="stretch_width", margin=0)
+    return pn.Card(
+        content,
+        header=header,
+        stylesheets=[_CARD_SHADOW_CSS],
+        active_header_background="#f4f5f8",
+        header_background="#ffffff",
+        collapsed=collapsed,
+        margin=0,
+        sizing_mode="stretch_width",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
 
 def _build_order_options(meta_cols: list[str]) -> dict[str, str]:
     opts = {"None": "", "Cluster": _CLUSTER_SENTINEL}
@@ -68,7 +166,7 @@ class SidebarControls:
     ) -> None:
         self.state = state
         self.chart_manager = chart_manager
-        self._syncing = False  # Guard flag: suppresses widget→state callbacks
+        self._syncing = False  # Guard flag: suppresses widget->state callbacks
         self._annotation_list_col = pn.Column(sizing_mode="stretch_width")
         self._code_display = pn.pane.Markdown("", sizing_mode="stretch_width")
         self._build_widgets()
@@ -98,33 +196,20 @@ class SidebarControls:
         if s.vmin is None or s.vmax is None:
             self._update_color_range_for_scaling()
 
-        # --- Value Scaling section ---
-        self.scale_method_select = pn.widgets.Select(
-            name="Method", value=s.scale_method,
-            options={
-                "None": "none",
-                "Center & Scale (z-score)": "zscore",
-                "Center only": "center",
-                "Min-Max [0,1]": "minmax",
-            },
-            sizing_mode="stretch_width",
+        # --- Per-axis scaling ---
+        _scale_options = {
+            "None": "none",
+            "Center & Scale (z-score)": "zscore",
+            "Center only": "center",
+            "Min-Max [0,1]": "minmax",
+        }
+        self.row_scale_method_select = pn.widgets.Select(
+            name="Row Scale", value=s.row_scale_method,
+            options=_scale_options, sizing_mode="stretch_width",
         )
-        self.scale_axis_select = pn.widgets.Select(
-            name="Apply", value=s.scale_axis,
-            options={"Row-wise": "row", "Column-wise": "column"},
-            sizing_mode="stretch_width",
-        )
-        self.scale_method_help = pn.pane.Markdown(
-            "*Z-score: centers to 0, scales to unit variance. "
-            "Center: shifts mean to 0. "
-            "Min-Max: rescales values to 0\u20131.*",
-            styles={"color": "#6b7280", "font-size": "11px"},
-            margin=(0, 0, 5, 0),
-        )
-        self.scale_axis_help = pn.pane.Markdown(
-            "*Row-wise: each gene independently. Column-wise: each sample independently.*",
-            styles={"color": "#6b7280", "font-size": "11px"},
-            margin=(0, 0, 5, 0),
+        self.col_scale_method_select = pn.widgets.Select(
+            name="Column Scale", value=s.col_scale_method,
+            options=_scale_options, sizing_mode="stretch_width",
         )
 
         # --- Labels section ---
@@ -264,7 +349,7 @@ class SidebarControls:
             sizing_mode="stretch_width",
         )
 
-        # Wire up widget → state bindings
+        # Wire up widget -> state bindings
         self._wire_bindings()
 
         # Wire annotation builder
@@ -299,9 +384,9 @@ class SidebarControls:
             lambda e: self._set_state("vmax", e.new), "value",
         )
 
-        # Value scaling
-        self.scale_method_select.param.watch(self._on_scaling_changed, "value")
-        self.scale_axis_select.param.watch(self._on_scaling_changed, "value")
+        # Per-axis scaling
+        self.row_scale_method_select.param.watch(self._on_scaling_changed, "value")
+        self.col_scale_method_select.param.watch(self._on_scaling_changed, "value")
 
         # Labels
         self.row_labels_select.param.watch(
@@ -355,10 +440,10 @@ class SidebarControls:
     # --- Scaling change handlers ---
 
     def _on_scaling_changed(self, event) -> None:
-        """Handle scaling method or axis change — single batched rebuild."""
-        new_method = self.scale_method_select.value
-        new_axis = self.scale_axis_select.value
-        new_vmin, new_vmax = self._compute_scaled_range(new_method, new_axis)
+        """Handle per-axis scaling change -- single batched rebuild."""
+        row_method = self.row_scale_method_select.value
+        col_method = self.col_scale_method_select.value
+        new_vmin, new_vmax = self._compute_scaled_range(row_method, col_method)
 
         # Update widgets under guard so their watch callbacks don't fire
         self._syncing = True
@@ -368,26 +453,29 @@ class SidebarControls:
         finally:
             self._syncing = False
 
-        # Single atomic state update → one rebuild with correct values
+        # Single atomic state update -> one rebuild with correct values
         self.state.param.update(
-            scale_method=new_method,
-            scale_axis=new_axis,
+            row_scale_method=row_method,
+            col_scale_method=col_method,
             vmin=new_vmin,
             vmax=new_vmax,
         )
 
     def _compute_scaled_range(
-        self, method: str, axis: str,
+        self, row_method: str, col_method: str,
     ) -> tuple[float, float]:
-        """Compute vmin/vmax from the (possibly scaled) data."""
+        """Compute vmin/vmax from the (possibly scaled) data — two-pass."""
         import numpy as np
         from ..transform.scaler import apply_scaling
 
         s = self.state
         if s.data is None:
             return (0.0, 1.0)
-        axis_int = 1 if axis == "row" else 0
-        scaled = apply_scaling(s.data, method, axis_int)
+        scaled = s.data
+        if row_method != "none":
+            scaled = apply_scaling(scaled, row_method, 1)
+        if col_method != "none":
+            scaled = apply_scaling(scaled, col_method, 0)
         finite = scaled.values[np.isfinite(scaled.values)]
         if len(finite) > 0:
             return (float(np.round(finite.min(), 2)), float(np.round(finite.max(), 2)))
@@ -396,7 +484,7 @@ class SidebarControls:
     def _update_color_range_for_scaling(self) -> None:
         """Set vmin/vmax widgets from current state. Used at init before watches exist."""
         new_vmin, new_vmax = self._compute_scaled_range(
-            self.state.scale_method, self.state.scale_axis,
+            self.state.row_scale_method, self.state.col_scale_method,
         )
         self.vmin_input.value = new_vmin
         self.vmax_input.value = new_vmax
@@ -682,44 +770,51 @@ class SidebarControls:
         if self.chart_manager is None:
             return []
         cm = self.chart_manager
-        return [pn.Card(
-            cm.chart_type_select,
-            cm.chart_column_select,
-            cm.chart_y_column_select,
-            cm.chart_add_button,
-            title="Charts", collapsed=True,
-            sizing_mode="stretch_width",
+        return [_make_section_card(
+            "Charts",
+            pn.Column(
+                cm.chart_type_select,
+                cm.chart_column_select,
+                cm.chart_y_column_select,
+                cm.chart_add_button,
+                sizing_mode="stretch_width",
+            ),
+            "charts",
+            collapsed=True,
         )]
 
     def build_panel(self) -> pn.Column:
         """Build the complete sidebar panel."""
+        branding = pn.pane.Markdown(
+            "**dream-heatmap**",
+            styles={"font-size": "15px", "color": "#202223", "white-space": "nowrap"},
+            margin=(0, 0, 0, 0),
+        )
+        header_row = pn.Row(
+            branding, self.status_text,
+            sizing_mode="stretch_width",
+            margin=(0, 0, 8, 0),
+        )
         return pn.Column(
-            pn.Card(
-                self.scale_method_select,
-                self.scale_method_help,
-                self.scale_axis_select,
-                self.scale_axis_help,
-                title="Value Scaling", collapsed=False,
-                sizing_mode="stretch_width",
-            ),
+            header_row,
 
-            pn.Card(
+            _make_section_card("Scale & Colour", pn.Column(
+                self.row_scale_method_select,
+                self.col_scale_method_select,
                 self.colormap_select,
                 pn.Row(self.vmin_input, self.vmax_input, sizing_mode="stretch_width"),
-                title="Color Scale", collapsed=False,
                 sizing_mode="stretch_width",
-            ),
+            ), "color", collapsed=False),
 
-            pn.Card(
+            _make_section_card("Labels", pn.Column(
                 self.row_labels_select,
                 self.row_label_side_select,
                 self.col_labels_select,
                 self.col_label_side_select,
-                title="Labels", collapsed=True,
                 sizing_mode="stretch_width",
-            ),
+            ), "labels"),
 
-            pn.Card(
+            _make_section_card("Annotations & Splits", pn.Column(
                 self.ann_axis_select,
                 self.ann_column_select,
                 self.ann_style_select,
@@ -727,35 +822,30 @@ class SidebarControls:
                 self.ann_add_button,
                 pn.layout.Divider(),
                 self._annotation_list_col,
-                title="Annotations & Splits", collapsed=True,
                 sizing_mode="stretch_width",
-            ),
+            ), "annotations"),
 
-            pn.Card(
+            _make_section_card("Row Ordering", pn.Column(
                 self.order_rows_select,
                 self.order_rows_2_select,
                 self.show_row_dendro_toggle,
                 self.row_cluster_method_select,
                 self.row_cluster_metric_select,
                 self.row_ordering_help_text,
-                title="Row Ordering", collapsed=True,
                 sizing_mode="stretch_width",
-            ),
+            ), "ordering"),
 
-            pn.Card(
+            _make_section_card("Column Ordering", pn.Column(
                 self.order_cols_select,
                 self.order_cols_2_select,
                 self.show_col_dendro_toggle,
                 self.col_cluster_method_select,
                 self.col_cluster_metric_select,
                 self.col_ordering_help_text,
-                title="Column Ordering", collapsed=True,
                 sizing_mode="stretch_width",
-            ),
+            ), "ordering"),
 
             *(self._build_charts_card()),
-
-            self.status_text,
 
             sizing_mode="stretch_width",
             scroll=True,

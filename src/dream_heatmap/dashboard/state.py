@@ -33,9 +33,9 @@ class DashboardState(param.Parameterized):
     vmin = param.Number(default=None, allow_None=True)
     vmax = param.Number(default=None, allow_None=True)
 
-    # --- Value scaling ---
-    scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
-    scale_axis = param.String(default="row")       # "row" or "column"
+    # --- Value scaling (per-axis) ---
+    row_scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
+    col_scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
 
     # (Splits are derived from annotation split flags — no dedicated params needed)
 
@@ -144,7 +144,7 @@ class DashboardState(param.Parameterized):
 
     @param.depends(
         "colormap", "vmin", "vmax",
-        "scale_method", "scale_axis",
+        "row_scale_method", "col_scale_method",
         "cluster_rows", "cluster_cols", "cluster_method", "cluster_metric",
         "order_rows_by", "order_cols_by",
         "order_rows_by_2", "order_cols_by_2",
@@ -162,11 +162,14 @@ class DashboardState(param.Parameterized):
         self._status_text = "Building..."
 
         try:
-            # Apply value scaling
+            # Apply value scaling (two-pass: row first, then column)
             from ..transform.scaler import apply_scaling
 
-            axis_int = 1 if self.scale_axis == "row" else 0
-            scaled_data = apply_scaling(self.data, self.scale_method, axis_int)
+            scaled_data = self.data
+            if self.row_scale_method != "none":
+                scaled_data = apply_scaling(scaled_data, self.row_scale_method, 1)
+            if self.col_scale_method != "none":
+                scaled_data = apply_scaling(scaled_data, self.col_scale_method, 0)
 
             hm = Heatmap(scaled_data)
 
@@ -183,10 +186,14 @@ class DashboardState(param.Parameterized):
                 "center": "Centered",
                 "minmax": "Min-Max [0,1]",
             }
-            axis_label = "row" if self.scale_axis == "row" else "column"
-            color_bar_title = scale_labels.get(self.scale_method)
-            if color_bar_title:
-                color_bar_title = f"{color_bar_title} ({axis_label}-wise)"
+            row_label = scale_labels.get(self.row_scale_method)
+            col_label = scale_labels.get(self.col_scale_method)
+            parts = []
+            if row_label:
+                parts.append(f"{row_label} (row-wise)")
+            if col_label:
+                parts.append(f"{col_label} (col-wise)")
+            color_bar_title = " + ".join(parts) if parts else None
 
             # Color scale
             hm.set_colormap(

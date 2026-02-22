@@ -21,7 +21,7 @@ class ColorBarRenderer {
    */
   renderInline(x, y, lut, vmin, vmax, title, parentGroup) {
     var ns = "http://www.w3.org/2000/svg";
-    var fontFamily = '"Open Sans", verdana, arial, sans-serif';
+    var fontFamily = '"Outfit", system-ui, -apple-system, sans-serif';
     var barWidth = 120;
     var barHeight = 12;
     var curY = y;
@@ -33,9 +33,9 @@ class ColorBarRenderer {
       titleEl.setAttribute("x", x);
       titleEl.setAttribute("y", curY + 10);
       titleEl.setAttribute("font-size", "10");
-      titleEl.setAttribute("font-weight", "bold");
+      titleEl.setAttribute("font-weight", "600");
       titleEl.setAttribute("font-family", fontFamily);
-      titleEl.setAttribute("fill", "#444");
+      titleEl.setAttribute("fill", "#334155");
       parentGroup.appendChild(titleEl);
       curY += 16;
     }
@@ -72,7 +72,7 @@ class ColorBarRenderer {
     rect.setAttribute("width", barWidth);
     rect.setAttribute("height", barHeight);
     rect.setAttribute("fill", "url(#" + gradId + ")");
-    rect.setAttribute("stroke", "#ccc");
+    rect.setAttribute("stroke", "#e2e8f0");
     rect.setAttribute("stroke-width", "0.5");
     parentGroup.appendChild(rect);
 
@@ -90,7 +90,7 @@ class ColorBarRenderer {
       line.setAttribute("x2", tickX);
       line.setAttribute("y1", curY + barHeight);
       line.setAttribute("y2", curY + barHeight + 3);
-      line.setAttribute("stroke", "#666");
+      line.setAttribute("stroke", "#94a3b8");
       line.setAttribute("stroke-width", "1");
       parentGroup.appendChild(line);
 
@@ -101,7 +101,7 @@ class ColorBarRenderer {
       text.setAttribute("y", tickY);
       text.setAttribute("font-size", "9");
       text.setAttribute("font-family", fontFamily);
-      text.setAttribute("fill", "#444");
+      text.setAttribute("fill", "#475569");
       text.setAttribute("text-anchor", "middle");
       parentGroup.appendChild(text);
     }

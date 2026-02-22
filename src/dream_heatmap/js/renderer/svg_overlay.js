@@ -40,8 +40,8 @@ class SVGOverlay {
     if (!this.hoverRect) {
       this.hoverRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       this.hoverRect.setAttribute("fill", "none");
-      this.hoverRect.setAttribute("stroke", "rgba(255,255,255,0.9)");
-      this.hoverRect.setAttribute("stroke-width", "2.5");
+      this.hoverRect.setAttribute("stroke", "rgba(255,255,255,0.95)");
+      this.hoverRect.setAttribute("stroke-width", "2");
       this.hoverRect.style.pointerEvents = "none";
       this.svg.appendChild(this.hoverRect);
     }
@@ -49,7 +49,7 @@ class SVGOverlay {
     if (!this.hoverRectInner) {
       this.hoverRectInner = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       this.hoverRectInner.setAttribute("fill", "none");
-      this.hoverRectInner.setAttribute("stroke", "rgba(0,0,0,0.7)");
+      this.hoverRectInner.setAttribute("stroke", "rgba(15,23,42,0.5)");
       this.hoverRectInner.setAttribute("stroke-width", "1");
       this.hoverRectInner.style.pointerEvents = "none";
       this.svg.appendChild(this.hoverRectInner);
@@ -78,21 +78,21 @@ class SVGOverlay {
       this._crosshairGroup.style.pointerEvents = "none";
       // Row highlight band
       this._chRowBand = document.createElementNS(ns, "rect");
-      this._chRowBand.setAttribute("fill", "rgba(31,119,180,0.06)");
+      this._chRowBand.setAttribute("fill", "rgba(13,148,136,0.05)");
       this._crosshairGroup.appendChild(this._chRowBand);
       // Col highlight band
       this._chColBand = document.createElementNS(ns, "rect");
-      this._chColBand.setAttribute("fill", "rgba(31,119,180,0.06)");
+      this._chColBand.setAttribute("fill", "rgba(13,148,136,0.05)");
       this._crosshairGroup.appendChild(this._chColBand);
       // Horizontal dashed line
       this._chHLine = document.createElementNS(ns, "line");
-      this._chHLine.setAttribute("stroke", "rgba(31,119,180,0.4)");
+      this._chHLine.setAttribute("stroke", "rgba(13,148,136,0.3)");
       this._chHLine.setAttribute("stroke-width", "1");
       this._chHLine.setAttribute("stroke-dasharray", "4,3");
       this._crosshairGroup.appendChild(this._chHLine);
       // Vertical dashed line
       this._chVLine = document.createElementNS(ns, "line");
-      this._chVLine.setAttribute("stroke", "rgba(31,119,180,0.4)");
+      this._chVLine.setAttribute("stroke", "rgba(13,148,136,0.3)");
       this._chVLine.setAttribute("stroke-width", "1");
       this._chVLine.setAttribute("stroke-dasharray", "4,3");
       this._crosshairGroup.appendChild(this._chVLine);
@@ -101,14 +101,14 @@ class SVGOverlay {
       this._chRowLabel = document.createElementNS(ns, "g");
       this._chRowLabelBg = document.createElementNS(ns, "rect");
       this._chRowLabelBg.setAttribute("fill", "#fff");
-      this._chRowLabelBg.setAttribute("stroke", "rgba(31,119,180,0.6)");
+      this._chRowLabelBg.setAttribute("stroke", "rgba(13,148,136,0.4)");
       this._chRowLabelBg.setAttribute("stroke-width", "0.5");
       this._chRowLabelBg.setAttribute("rx", "2");
       this._chRowLabel.appendChild(this._chRowLabelBg);
       this._chRowLabelText = document.createElementNS(ns, "text");
       this._chRowLabelText.setAttribute("font-size", "9");
-      this._chRowLabelText.setAttribute("font-family", '"Open Sans", verdana, arial, sans-serif');
-      this._chRowLabelText.setAttribute("fill", "#1f77b4");
+      this._chRowLabelText.setAttribute("font-family", '"Outfit", system-ui, -apple-system, sans-serif');
+      this._chRowLabelText.setAttribute("fill", "#0d9488");
       this._chRowLabelText.setAttribute("text-anchor", "end");
       this._chRowLabelText.setAttribute("dominant-baseline", "central");
       this._chRowLabel.appendChild(this._chRowLabelText);
@@ -118,14 +118,14 @@ class SVGOverlay {
       this._chColLabel = document.createElementNS(ns, "g");
       this._chColLabelBg = document.createElementNS(ns, "rect");
       this._chColLabelBg.setAttribute("fill", "#fff");
-      this._chColLabelBg.setAttribute("stroke", "rgba(31,119,180,0.6)");
+      this._chColLabelBg.setAttribute("stroke", "rgba(13,148,136,0.4)");
       this._chColLabelBg.setAttribute("stroke-width", "0.5");
       this._chColLabelBg.setAttribute("rx", "2");
       this._chColLabel.appendChild(this._chColLabelBg);
       this._chColLabelText = document.createElementNS(ns, "text");
       this._chColLabelText.setAttribute("font-size", "9");
-      this._chColLabelText.setAttribute("font-family", '"Open Sans", verdana, arial, sans-serif');
-      this._chColLabelText.setAttribute("fill", "#1f77b4");
+      this._chColLabelText.setAttribute("font-family", '"Outfit", system-ui, -apple-system, sans-serif');
+      this._chColLabelText.setAttribute("fill", "#0d9488");
       this._chColLabelText.setAttribute("text-anchor", "middle");
       this._chColLabelText.setAttribute("dominant-baseline", "hanging");
       this._chColLabel.appendChild(this._chColLabelText);
@@ -214,10 +214,10 @@ class SVGOverlay {
   showSelection(x, y, width, height) {
     if (!this.selectionRect) {
       this.selectionRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      this.selectionRect.setAttribute("fill", "rgba(31,119,180,0.12)");
-      this.selectionRect.setAttribute("stroke", "rgba(31,119,180,0.8)");
+      this.selectionRect.setAttribute("fill", "rgba(13,148,136,0.08)");
+      this.selectionRect.setAttribute("stroke", "rgba(13,148,136,0.6)");
       this.selectionRect.setAttribute("stroke-width", "1.5");
-      this.selectionRect.setAttribute("stroke-dasharray", "6,3");
+      this.selectionRect.setAttribute("stroke-dasharray", "5,4");
       this.selectionRect.style.pointerEvents = "none";
       this.svg.appendChild(this.selectionRect);
     }
@@ -298,7 +298,7 @@ class SVGOverlay {
 
       // Style
       path.setAttribute("fill", "none");
-      path.setAttribute("stroke", "#333");
+      path.setAttribute("stroke", "#cbd5e1");
       path.setAttribute("stroke-width", "1");
       path.style.cursor = "pointer";
 
@@ -311,11 +311,11 @@ class SVGOverlay {
 
       // Hover highlight
       path.addEventListener("mouseenter", () => {
-        path.setAttribute("stroke", "#e63946");
-        path.setAttribute("stroke-width", "2");
+        path.setAttribute("stroke", "#e11d48");
+        path.setAttribute("stroke-width", "1.5");
       });
       path.addEventListener("mouseleave", () => {
-        path.setAttribute("stroke", "#333");
+        path.setAttribute("stroke", "#cbd5e1");
         path.setAttribute("stroke-width", "1");
       });
 
@@ -368,7 +368,7 @@ class SVGOverlay {
    * @param {object} annotations - {left: [...], right: [...], top: [...], bottom: [...]}
    * @param {object} layout - layout spec
    */
-  renderAnnotations(annotations, layout) {
+  renderAnnotations(annotations, layout, onCategoryClick) {
     // Remove previous annotation group
     if (this._annotationGroup) {
       this._annotationGroup.remove();
@@ -386,7 +386,7 @@ class SVGOverlay {
       if (!tracks || tracks.length === 0) continue;
 
       for (const track of tracks) {
-        this._renderAnnotationTrack(track, edge, layout);
+        this._renderAnnotationTrack(track, edge, layout, onCategoryClick);
         this._renderTrackTitle(track, edge, layout);
       }
     }
@@ -399,7 +399,7 @@ class SVGOverlay {
     }
   }
 
-  _renderAnnotationTrack(track, edge, layout) {
+  _renderAnnotationTrack(track, edge, layout, onCategoryClick) {
     const heatmap = layout.heatmap;
     const isRow = (edge === "left" || edge === "right");
     const positions = isRow ? layout.rowPositions : layout.colPositions;
@@ -423,7 +423,7 @@ class SVGOverlay {
     );
 
     if (trackType === "categorical") {
-      this._renderCategorical(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
+      this._renderCategorical(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps, onCategoryClick);
     } else if (trackType === "bar") {
       this._renderBar(mergedTrack, edge, positions, cellSize, heatmap, secondaryGaps);
     } else if (trackType === "sparkline") {
@@ -444,7 +444,7 @@ class SVGOverlay {
     if (edge === "bottom")return { x: heatmap.x, y: heatmap.y + heatmap.height + offset, w: heatmap.width, h: trackWidth };
   }
 
-  _renderCategorical(track, edge, positions, cellSize, heatmap, secondaryGaps) {
+  _renderCategorical(track, edge, positions, cellSize, heatmap, secondaryGaps, onCategoryClick) {
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
     const catLabels = track.cellLabels || [];
@@ -477,6 +477,14 @@ class SVGOverlay {
         this._addAnnotationHover(rect, tipHtml);
       } else {
         rect.style.pointerEvents = "none";
+      }
+      // Click-to-select: click a colored cell to select all rows/cols with this category
+      if (catName && onCategoryClick) {
+        rect.style.cursor = "pointer";
+        rect.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onCategoryClick(catName, edge, catLabels);
+        });
       }
       this._annotationGroup.appendChild(rect);
     }
@@ -513,11 +521,22 @@ class SVGOverlay {
       text.textContent = run.label;
       const fontSize = spanSize < 30 ? "8" : "9";
       text.setAttribute("font-size", fontSize);
-      text.setAttribute("font-family", '"Open Sans", verdana, arial, sans-serif');
+      text.setAttribute("font-family", '"Outfit", system-ui, -apple-system, sans-serif');
       text.setAttribute("fill", this._contrastColor(run.color));
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("dominant-baseline", "central");
-      text.style.pointerEvents = "none";
+
+      // Click-to-select on run text labels
+      if (onCategoryClick) {
+        text.style.pointerEvents = "all";
+        text.style.cursor = "pointer";
+        text.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onCategoryClick(run.label, edge, catLabels);
+        });
+      } else {
+        text.style.pointerEvents = "none";
+      }
 
       if (isRow) {
         // Vertical text centered on the run span
@@ -558,7 +577,7 @@ class SVGOverlay {
     }
     // Relative luminance (sRGB)
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-    return lum > 150 ? "#333" : "#fff";
+    return lum > 150 ? "#1e293b" : "#f8fafc";
   }
 
   _renderBar(track, edge, positions, cellSize, heatmap, secondaryGaps) {
@@ -629,17 +648,17 @@ class SVGOverlay {
 
     // Baseline axis line
     const axisLine = document.createElementNS(ns, "line");
-    axisLine.setAttribute("stroke", "#333");
+    axisLine.setAttribute("stroke", "#cbd5e1");
     axisLine.setAttribute("stroke-width", "1");
     axisLine.style.pointerEvents = "none";
 
-    const font = '"Open Sans", verdana, arial, sans-serif';
+    const font = '"Outfit", system-ui, -apple-system, sans-serif';
     const minLabel = document.createElementNS(ns, "text");
     const maxLabel = document.createElementNS(ns, "text");
     for (const lbl of [minLabel, maxLabel]) {
       lbl.setAttribute("font-size", "8");
       lbl.setAttribute("font-family", font);
-      lbl.setAttribute("fill", "#666");
+      lbl.setAttribute("fill", "#64748b");
       lbl.style.pointerEvents = "none";
     }
     const minText = isFinite(track.vmin) ? parseFloat(track.vmin.toPrecision(3)) : "";
@@ -952,8 +971,8 @@ class SVGOverlay {
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.textContent = labelText;
       text.setAttribute("font-size", fontSize);
-      text.setAttribute("font-family", "sans-serif");
-      text.setAttribute("fill", "#333");
+      text.setAttribute("font-family", '"Outfit", system-ui, -apple-system, sans-serif');
+      text.setAttribute("fill", "#334155");
       text.style.pointerEvents = "none";
 
       if (isRow) {
@@ -993,13 +1012,14 @@ class SVGOverlay {
     const heatmap = layout.heatmap;
     const isRow = (edge === "left" || edge === "right");
     const area = this._getTrackRect(edge, track.offset, track.trackWidth, heatmap);
-    const font = '"Open Sans", verdana, arial, sans-serif';
+    const font = '"Outfit", system-ui, -apple-system, sans-serif';
     const ns = "http://www.w3.org/2000/svg";
     const text = document.createElementNS(ns, "text");
     text.textContent = track.name || "";
     text.setAttribute("font-size", "9");
     text.setAttribute("font-family", font);
-    text.setAttribute("fill", "#666");
+    text.setAttribute("fill", "#64748b");
+    text.setAttribute("font-weight", "500");
     text.style.pointerEvents = "none";
 
     if (isRow) {
@@ -1057,7 +1077,7 @@ class SVGOverlay {
     if (!labels) { this.svg.appendChild(this._labelGroup); return; }
 
     const heatmap = layout.heatmap;
-    const font = '"Open Sans", verdana, arial, sans-serif';
+    const font = '"Outfit", system-ui, -apple-system, sans-serif';
     // Offset past annotations so labels don't overlap
     const leftAnnotW = layout.leftAnnotationWidth || 0;
     const rightAnnotW = layout.rightAnnotationWidth || 0;
@@ -1078,7 +1098,7 @@ class SVGOverlay {
         text.setAttribute("y", lbl.position);
         text.setAttribute("font-size", lbl.fontSize || 10);
         text.setAttribute("font-family", font);
-        text.setAttribute("fill", "#444");
+        text.setAttribute("fill", "#334155");
         text.setAttribute("text-anchor", anchor);
         text.setAttribute("dominant-baseline", "central");
         text.style.pointerEvents = "none";
@@ -1101,7 +1121,7 @@ class SVGOverlay {
           text.setAttribute("y", labelY);
           text.setAttribute("font-size", lbl.fontSize || 10);
           text.setAttribute("font-family", font);
-          text.setAttribute("fill", "#444");
+          text.setAttribute("fill", "#334155");
           text.setAttribute("text-anchor", "start");
           text.setAttribute("dominant-baseline", "hanging");
           text.setAttribute("transform", `rotate(45, ${lbl.position}, ${labelY})`);
@@ -1122,7 +1142,7 @@ class SVGOverlay {
           text.setAttribute("y", labelY);
           text.setAttribute("font-size", lbl.fontSize || 10);
           text.setAttribute("font-family", font);
-          text.setAttribute("fill", "#444");
+          text.setAttribute("fill", "#334155");
           text.setAttribute("text-anchor", "end");
           text.setAttribute("dominant-baseline", "auto");
           text.setAttribute("transform", `rotate(-45, ${lbl.position}, ${labelY})`);

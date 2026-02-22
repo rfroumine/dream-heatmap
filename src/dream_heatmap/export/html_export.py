@@ -132,6 +132,7 @@ class HTMLExporter:
             _JS_DIR / "interaction" / "hover_handler.js",
             _JS_DIR / "interaction" / "selection_handler.js",
             _JS_DIR / "interaction" / "dendrogram_click.js",
+            _JS_DIR / "interaction" / "annotation_click.js",
             _JS_DIR / "interaction" / "zoom_handler.js",
             _JS_DIR / "interaction" / "toolbar.js",
         ]

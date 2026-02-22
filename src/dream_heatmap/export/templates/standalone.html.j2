@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ title }}</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
   body {
     margin: 0;
-    padding: 20px;
-    font-family: "Open Sans", verdana, arial, sans-serif;
-    background: #fff;
+    padding: 24px;
+    font-family: "Outfit", system-ui, -apple-system, sans-serif;
+    background: #fafbfc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   #heatmap-container {
     position: relative;
@@ -24,9 +27,10 @@
     left: 0;
   }
   .dh-info {
-    margin-top: 10px;
-    font-size: 12px;
-    color: #666;
+    margin-top: 14px;
+    font-size: 11px;
+    color: #94a3b8;
+    letter-spacing: 0.01em;
   }
   {{ css_source }}
 </style>
@@ -225,7 +229,10 @@ function buildZoomedResolver(origMapperData, positions, cellSize, start, end) {
     // Annotations
     if (showAnnotations) {
       var annotations = origConfig.annotations || null;
-      svgOverlay.renderAnnotations(annotations, layout);
+      annotationClickHandler.setContext(layout, rowResolver, colResolver);
+      svgOverlay.renderAnnotations(annotations, layout, function(categoryName, edge, cellLabels) {
+        annotationClickHandler.onCategoryClick(categoryName, edge, cellLabels);
+      });
     } else {
       svgOverlay.renderAnnotations(null, layout);
     }
@@ -301,10 +308,12 @@ function buildZoomedResolver(origMapperData, positions, cellSize, start, end) {
 
   var selectionHandler = new SelectionHandler(svg, svgOverlay, dummySync, hoverHandler);
   var dendroClickHandler = new DendrogramClickHandler(svgOverlay, dummySync);
+  var annotationClickHandler = new AnnotationClickHandler(svgOverlay, dummySync);
   var viewport = new Viewport();
   var zoomHandler = new ZoomHandler(svg, dummySync, viewport, svgOverlay);
   selectionHandler.setZoomHandler(zoomHandler);
   dendroClickHandler.setZoomHandler(zoomHandler);
+  annotationClickHandler.setZoomHandler(zoomHandler);
 
   // Toolbar
   var toolbar = new Toolbar(container);

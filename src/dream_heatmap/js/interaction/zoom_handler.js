@@ -110,9 +110,11 @@ class ZoomHandler {
     toast.textContent = message;
     toast.style.cssText =
       "position:absolute;bottom:12px;left:50%;transform:translateX(-50%);" +
-      "background:rgba(0,0,0,0.75);color:#fff;padding:6px 14px;border-radius:4px;" +
-      "font-size:12px;font-family:'Open Sans',verdana,arial,sans-serif;" +
-      "pointer-events:none;z-index:300;white-space:nowrap;opacity:1;transition:opacity 0.3s;";
+      "background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);" +
+      "color:#f8fafc;padding:7px 16px;border-radius:8px;" +
+      "font-size:12px;font-family:'Outfit',system-ui,-apple-system,sans-serif;font-weight:500;" +
+      "pointer-events:none;z-index:300;white-space:nowrap;opacity:1;transition:opacity 0.3s;" +
+      "box-shadow:0 4px 12px rgba(0,0,0,0.15);letter-spacing:-0.01em;";
     container.appendChild(toast);
     setTimeout(() => { toast.style.opacity = "0"; }, 1700);
     setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2000);

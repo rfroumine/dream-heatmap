@@ -16,76 +16,79 @@ from .chart_panel import ChartPanelManager
 
 _DASHBOARD_CSS = """
 /* ================================================================
-   Layer 1 — CSS Custom Properties
+   Layer 1 — CSS Custom Properties (Shopify Polaris / Indigo)
    ================================================================ */
 :root, :host {
-  --design-primary-color: #1a73e8;
+  --design-primary-color: #5c6ac4;
   --design-primary-text-color: #ffffff;
-  --design-secondary-color: #1557b0;
+  --design-secondary-color: #4959bd;
   --design-surface-color: #ffffff;
-  --design-background-color: #fafafa;
-  --panel-primary-color: #1a73e8;
-  --panel-secondary-color: #1557b0;
-  --mdc-theme-primary: #1a73e8;
-  --mdc-theme-secondary: #1557b0;
+  --design-background-color: #ffffff;
+  --panel-primary-color: #5c6ac4;
+  --panel-secondary-color: #4959bd;
+  --mdc-theme-primary: #5c6ac4;
+  --mdc-theme-secondary: #4959bd;
   --mdc-theme-surface: #ffffff;
-  --mdc-shape-medium: 16px;
+  --mdc-shape-medium: 10px;
 }
 
 /* ================================================================
-   Layer 2 — Component overrides (organic + Inter)
+   Layer 2 — Component overrides (Shopify Admin + Outfit)
    ================================================================ */
 
 /* ---- Pill buttons (primary + success) ---- */
 .bk-btn-primary, .bk-btn-success {
   border-radius: 24px !important;
-  background-color: #1a73e8 !important;
-  border-color: #1a73e8 !important;
+  background-color: #5c6ac4 !important;
+  border-color: #5c6ac4 !important;
   color: #ffffff !important;
   box-shadow: none !important;
   font-weight: 500 !important;
   font-size: 13px !important;
   text-transform: none !important;
   letter-spacing: 0 !important;
+  transition: all 0.15s ease !important;
 }
 .bk-btn-primary:hover, .bk-btn-success:hover {
-  background-color: #1557b0 !important;
-  border-color: #1557b0 !important;
+  background-color: #4959bd !important;
+  border-color: #4959bd !important;
 }
 
 /* ---- Outlined danger button ---- */
 .bk-btn-danger {
   border-radius: 24px !important;
   background-color: transparent !important;
-  border: 1px solid #d93025 !important;
-  color: #d93025 !important;
+  border: 1px solid #dc2626 !important;
+  color: #dc2626 !important;
   font-size: 11px !important;
   font-weight: 500 !important;
   text-transform: none !important;
   box-shadow: none !important;
+  transition: all 0.15s ease !important;
 }
 .bk-btn-danger:hover {
-  background-color: rgba(217,48,37,0.08) !important;
+  background-color: rgba(220,38,38,0.08) !important;
 }
 
 /* ---- Toggle buttons (active state) ---- */
 .bk-btn-default.active,
 .bk-active {
-  background-color: #e8f0fe !important;
-  border-color: #1a73e8 !important;
-  color: #1a73e8 !important;
+  background-color: rgba(92,106,196,0.06) !important;
+  border-color: #5c6ac4 !important;
+  color: #5c6ac4 !important;
 }
 
 /* ---- Input / select widgets ---- */
 .bk-input, select {
-  border-radius: 10px !important;
-  border: 1px solid #dadce0 !important;
+  border-radius: 8px !important;
+  border: 1px solid #c9cccf !important;
   font-size: 13px !important;
   padding: 5px 8px !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 .bk-input:focus, select:focus {
-  border-color: #1a73e8 !important;
-  box-shadow: 0 0 0 2px rgba(26,115,232,0.2) !important;
+  border-color: #5c6ac4 !important;
+  box-shadow: 0 0 0 2px rgba(92,106,196,0.15) !important;
 }
 
 /* ---- Radio button group ---- */
@@ -95,31 +98,16 @@ _DASHBOARD_CSS = """
   text-transform: none !important;
 }
 
-/* ---- Cards ---- */
-.card {
-  border-radius: 16px !important;
-  border: none !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08),
-              0 1px 2px rgba(0,0,0,0.06) !important;
-  margin-bottom: 8px !important;
-}
-.card-header {
-  background: transparent !important;
-  border-bottom: none !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  padding: 12px 16px !important;
-}
-
 /* ---- Labels ---- */
 label, .bk-input-group label {
   font-size: 12px !important;
   font-weight: 500 !important;
+  color: #637381 !important;
 }
 
 /* ---- Divider ---- */
 .bk-Divider {
-  border-top: 1px solid #f0f0f0 !important;
+  border-top: 1px solid #e1e3e5 !important;
   margin: 8px 0 !important;
 }
 
@@ -127,49 +115,41 @@ label, .bk-input-group label {
    Layer 3 — Template-level CSS
    ================================================================ */
 
-/* ---- Inter font ---- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+/* ---- Outfit + JetBrains Mono fonts ---- */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 body, .mdc-typography {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  color: #202124 !important;
+  font-family: "Outfit", system-ui, -apple-system, sans-serif !important;
+  color: #202223 !important;
 }
 
-/* ---- Compact header ---- */
+/* ---- Hide header bar entirely ---- */
 .mdc-top-app-bar {
-  height: 44px !important;
-  min-height: 44px !important;
-  background: #fafafa !important;
-  box-shadow: none !important;
-  border-bottom: 1px solid #f0f0f0 !important;
-}
-.mdc-top-app-bar__title {
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  color: #202124 !important;
-  letter-spacing: -0.01em !important;
-}
-.mdc-top-app-bar__row {
-  height: 44px !important;
-  min-height: 44px !important;
+  display: none !important;
 }
 .mdc-top-app-bar--fixed-adjust {
-  padding-top: 44px !important;
+  padding-top: 0 !important;
+}
+.mdc-drawer {
+  top: 0 !important;
 }
 
-/* ---- Header icon visibility ---- */
-.mdc-top-app-bar .mdc-icon-button,
-.mdc-top-app-bar .mdc-top-app-bar__navigation-icon,
-.mdc-top-app-bar .mdc-top-app-bar__action-item {
-  color: #202124 !important;
+/* ---- Loading spinner: more visible ---- */
+.pn-loading.arcs::before {
+  width: 48px !important;
+  height: 48px !important;
+  border-width: 4px !important;
 }
 
-/* ---- Organic sidebar (shadow, no hard border) ---- */
+/* ---- Clean white sidebar ---- */
 #sidebar {
-  background: #fafafa !important;
-  border-right: none !important;
-  box-shadow: 1px 0 3px rgba(0,0,0,0.04) !important;
+  background: #ffffff !important;
+  border-right: 1px solid #e1e3e5 !important;
+  box-shadow: none !important;
 }
-#sidebar .mdc-drawer__content { background: #fafafa !important; }
+#sidebar .mdc-drawer__content { background: #ffffff !important; }
+#sidebar .bk-input-group {
+  margin-bottom: 4px !important;
+}
 
 /* ---- Main content area ---- */
 .main .bk-Column {
@@ -180,12 +160,12 @@ body, .mdc-typography {
 .code-export-modal pre {
   background: #1e1e2e !important;
   color: #cdd6f4 !important;
-  border-radius: 16px !important;
+  border-radius: 10px !important;
   padding: 16px !important;
   font-size: 12px !important;
   line-height: 1.5 !important;
   overflow-x: auto !important;
-  font-family: "Fira Code", "JetBrains Mono", "Cascadia Code", monospace !important;
+  font-family: "JetBrains Mono", "Cascadia Code", "Consolas", monospace !important;
 }
 """
 
@@ -209,7 +189,7 @@ class DashboardApp:
 
         # Inject custom CSS and loading spinner color
         pn.config.raw_css.append(_DASHBOARD_CSS)
-        pn.config.loading_color = "#1a73e8"
+        pn.config.loading_color = "#5c6ac4"
 
         # Create the heatmap pane (JSComponent)
         self.heatmap_pane = HeatmapPane(
@@ -258,20 +238,28 @@ class DashboardApp:
     def _build_template(self) -> pn.template.MaterialTemplate:
         """Build the Panel MaterialTemplate layout."""
         template = pn.template.MaterialTemplate(
-            title="dream heatmap",
+            title="dream-heatmap",
             sidebar=[self.sidebar_controls.build_panel()],
             sidebar_width=260,
-            header_background="#fafafa",
-            header_color="#202124",
+            header_background="#ffffff",
+            header_color="#1a1a2e",
         )
 
         # Wire sidebar → template for modal support
         self.sidebar_controls.set_template(template)
         template.modal.extend(self.sidebar_controls.build_modal_content())
 
-        # Main content: full-width heatmap + bottom chart grid
+        # Attribution line below the heatmap
+        attribution = pn.pane.HTML(
+            '<div style="text-align:right;font-size:11px;color:#919eab;'
+            'padding:2px 8px 0 0;">Generated by dream-heatmap</div>',
+            sizing_mode="stretch_width",
+        )
+
+        # Main content: full-width heatmap + attribution + bottom chart grid
         main_content = pn.Column(
             self.heatmap_pane,
+            attribution,
             self._bottom_chart_grid,
             sizing_mode="stretch_width",
         )

@@ -40,10 +40,12 @@ function render({ model, el }) {
   const hoverHandler = new HoverHandler(svg, tooltip, svgOverlay, container);
   const selectionHandler = new SelectionHandler(svg, svgOverlay, sync, hoverHandler);
   const dendroClickHandler = new DendrogramClickHandler(svgOverlay, sync);
+  const annotationClickHandler = new AnnotationClickHandler(svgOverlay, sync);
   const viewport = new Viewport();
   const zoomHandler = new ZoomHandler(svg, sync, viewport, svgOverlay);
   selectionHandler.setZoomHandler(zoomHandler);
   dendroClickHandler.setZoomHandler(zoomHandler);
+  annotationClickHandler.setZoomHandler(zoomHandler);
 
   // Toolbar
   const toolbar = new Toolbar(container);
@@ -113,7 +115,10 @@ function render({ model, el }) {
 
     // Render annotations
     const annotations = config.annotations || null;
-    svgOverlay.renderAnnotations(annotations, layout);
+    annotationClickHandler.setContext(layout, rowResolver, colResolver);
+    svgOverlay.renderAnnotations(annotations, layout, (categoryName, edge, cellLabels) => {
+      annotationClickHandler.onCategoryClick(categoryName, edge, cellLabels);
+    });
 
     // Render color bar + categorical legends (unified in legend panel)
     const legends = config.legends || null;

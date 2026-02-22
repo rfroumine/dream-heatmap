@@ -24,57 +24,71 @@ _JS_DIR = pathlib.Path(__file__).parent.parent / "js"
 
 # CSS for the heatmap container (same as HeatmapWidget but standalone)
 _HEATMAP_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 .dh-container {
   position: relative;
   display: inline-block;
-  font-family: "Open Sans", verdana, arial, sans-serif;
+  font-family: "Outfit", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 .dh-tooltip {
   position: absolute;
   display: none;
-  background: #fff;
-  color: #333;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: "Open Sans", verdana, arial, sans-serif;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #0f172a;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: "Outfit", system-ui, -apple-system, sans-serif;
   pointer-events: none;
   z-index: 100;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  border: 1px solid #e0e0e0;
-  line-height: 1.6;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.06);
+  line-height: 1.7;
+  letter-spacing: -0.01em;
 }
 .dh-tooltip .dh-tip-label {
-  color: #888;
+  color: #94a3b8;
   font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .dh-tooltip .dh-tip-value {
-  font-weight: normal;
+  font-weight: 500;
+  font-family: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
+  font-size: 11px;
+  color: #0f172a;
 }
 .dh-tooltip .dh-tip-swatch {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border-radius: 2px;
-  border: 1px solid #ccc;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.1);
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: 5px;
 }
 .dh-toolbar {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
   display: flex;
-  gap: 2px;
-  background: rgba(255,255,255,0.9);
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 2px;
+  gap: 1px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 8px;
+  padding: 3px;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.25s ease;
   z-index: 200;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 .dh-container:hover .dh-toolbar {
   opacity: 1;
@@ -83,24 +97,26 @@ _HEATMAP_CSS = """
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 3px;
-  color: #666;
+  padding: 6px 7px;
+  border-radius: 6px;
+  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
 }
 .dh-toolbar button:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: rgba(0,0,0,0.04);
+  color: #0f172a;
 }
 .dh-toolbar button.active {
-  background: #e3edf7;
-  color: #1f77b4;
+  background: rgba(92,106,196,0.08);
+  color: #5c6ac4;
 }
 .dh-toolbar button svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.6;
 }
 .dh-show-all-labels .dh-label-auto-hidden {
   display: inline !important;
@@ -142,10 +158,12 @@ export function render({ model, el }) {
   const hoverHandler = new HoverHandler(svg, tooltip, svgOverlay, container);
   const selectionHandler = new SelectionHandler(svg, svgOverlay, sync, hoverHandler);
   const dendroClickHandler = new DendrogramClickHandler(svgOverlay, sync);
+  const annotationClickHandler = new AnnotationClickHandler(svgOverlay, sync);
   const viewport = new Viewport();
   const zoomHandler = new ZoomHandler(svg, sync, viewport, svgOverlay);
   selectionHandler.setZoomHandler(zoomHandler);
   dendroClickHandler.setZoomHandler(zoomHandler);
+  annotationClickHandler.setZoomHandler(zoomHandler);
 
   // Toolbar
   const toolbar = new Toolbar(container);
@@ -211,7 +229,10 @@ export function render({ model, el }) {
 
     // Render annotations
     const annotations = config.annotations || null;
-    svgOverlay.renderAnnotations(annotations, layout);
+    annotationClickHandler.setContext(layout, rowResolver, colResolver);
+    svgOverlay.renderAnnotations(annotations, layout, (categoryName, edge, cellLabels) => {
+      annotationClickHandler.onCategoryClick(categoryName, edge, cellLabels);
+    });
 
     // Render color bar + categorical legends
     const legends = config.legends || null;
@@ -264,6 +285,7 @@ def _build_esm() -> str:
         _JS_DIR / "interaction" / "hover_handler.js",
         _JS_DIR / "interaction" / "selection_handler.js",
         _JS_DIR / "interaction" / "dendrogram_click.js",
+        _JS_DIR / "interaction" / "annotation_click.js",
         _JS_DIR / "interaction" / "zoom_handler.js",
         _JS_DIR / "interaction" / "toolbar.js",
     ]

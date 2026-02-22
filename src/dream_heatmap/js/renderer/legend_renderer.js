@@ -29,12 +29,12 @@ class LegendRenderer {
     this._group.setAttribute("class", "dh-legend-panel");
     this._group.style.pointerEvents = "none";
 
-    var swatchSize = 10;
-    var swatchLabelGap = 6;
-    var rowHeight = 14;
-    var titleHeight = 16;
-    var blockGap = 16;
-    var fontFamily = '"Open Sans", verdana, arial, sans-serif';
+    var swatchSize = 11;
+    var swatchLabelGap = 7;
+    var rowHeight = 16;
+    var titleHeight = 18;
+    var blockGap = 20;
+    var fontFamily = '"Outfit", system-ui, -apple-system, sans-serif';
 
     var panelX = legendPanel.x;
     var curY = legendPanel.y;
@@ -59,9 +59,9 @@ class LegendRenderer {
         title.setAttribute("x", panelX);
         title.setAttribute("y", curY + 10);
         title.setAttribute("font-size", "10");
-        title.setAttribute("font-weight", "bold");
+        title.setAttribute("font-weight", "600");
         title.setAttribute("font-family", fontFamily);
-        title.setAttribute("fill", "#444");
+        title.setAttribute("fill", "#334155");
         this._group.appendChild(title);
 
         var entryY = curY + titleHeight;
@@ -77,7 +77,7 @@ class LegendRenderer {
           rect.setAttribute("width", swatchSize);
           rect.setAttribute("height", swatchSize);
           rect.setAttribute("fill", entry.color);
-          rect.setAttribute("rx", "1");
+          rect.setAttribute("rx", "2");
           this._group.appendChild(rect);
 
           // Label
@@ -87,7 +87,7 @@ class LegendRenderer {
           label.setAttribute("y", entryY + swatchSize * 0.8);
           label.setAttribute("font-size", "10");
           label.setAttribute("font-family", fontFamily);
-          label.setAttribute("fill", "#444");
+          label.setAttribute("fill", "#475569");
           this._group.appendChild(label);
 
           entryY += rowHeight;

@@ -29,25 +29,26 @@ def generate_code(state: DashboardState) -> str:
         lines.append('row_meta = pd.read_csv("data/tme_marker_metadata.csv").set_index("marker")')
     lines.append("")
 
-    # Value scaling
-    if state.scale_method != "none":
-        lines.append("# Scale values")
-        axis_int = 1 if state.scale_axis == "row" else 0
-        if state.scale_method == "zscore":
-            if axis_int == 1:
-                lines.append("expr = expr.sub(expr.mean(axis=1), axis=0).div(expr.std(axis=1).replace(0, 1), axis=0)")
-            else:
-                lines.append("expr = (expr - expr.mean()) / expr.std().replace(0, 1)")
-        elif state.scale_method == "center":
-            if axis_int == 1:
-                lines.append("expr = expr.sub(expr.mean(axis=1), axis=0)")
-            else:
-                lines.append("expr = expr - expr.mean()")
-        elif state.scale_method == "minmax":
-            if axis_int == 1:
-                lines.append("expr = expr.sub(expr.min(axis=1), axis=0).div((expr.max(axis=1) - expr.min(axis=1)).replace(0, 1), axis=0)")
-            else:
-                lines.append("expr = (expr - expr.min()) / (expr.max() - expr.min()).replace(0, 1)")
+    # Value scaling (row-wise pass)
+    if state.row_scale_method != "none":
+        lines.append("# Scale values (row-wise)")
+        if state.row_scale_method == "zscore":
+            lines.append("expr = expr.sub(expr.mean(axis=1), axis=0).div(expr.std(axis=1).replace(0, 1), axis=0)")
+        elif state.row_scale_method == "center":
+            lines.append("expr = expr.sub(expr.mean(axis=1), axis=0)")
+        elif state.row_scale_method == "minmax":
+            lines.append("expr = expr.sub(expr.min(axis=1), axis=0).div((expr.max(axis=1) - expr.min(axis=1)).replace(0, 1), axis=0)")
+        lines.append("")
+
+    # Value scaling (column-wise pass)
+    if state.col_scale_method != "none":
+        lines.append("# Scale values (column-wise)")
+        if state.col_scale_method == "zscore":
+            lines.append("expr = (expr - expr.mean()) / expr.std().replace(0, 1)")
+        elif state.col_scale_method == "center":
+            lines.append("expr = expr - expr.mean()")
+        elif state.col_scale_method == "minmax":
+            lines.append("expr = (expr - expr.min()) / (expr.max() - expr.min()).replace(0, 1)")
         lines.append("")
 
     # Build heatmap
