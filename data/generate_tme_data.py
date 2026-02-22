@@ -300,6 +300,7 @@ def generate():
     subtypes = []
     patient_ids = []
     tissue_regions = []
+    match_types = []
     expression_rows = []  # list of 1-D arrays, one per cell
 
     cell_counter = 0
@@ -349,11 +350,14 @@ def generate():
                     # Tissue region assignment
                     region = rng.choice(region_names, p=region_weights)
 
+                    match_type = rng.choice(["perfect", "soft"])
+
                     cell_ids.append(cell_id)
                     cell_types.append(cell_type)
                     subtypes.append(st["name"])
                     patient_ids.append(patient_id)
                     tissue_regions.append(region)
+                    match_types.append(match_type)
                     expression_rows.append(expr)
 
     # Build expression matrix: markers × cells
@@ -367,6 +371,7 @@ def generate():
         "subtype": subtypes,
         "patient_id": patient_ids,
         "tissue_region": tissue_regions,
+        "match_type": match_types,
     })
 
     # Marker category and group assignments
