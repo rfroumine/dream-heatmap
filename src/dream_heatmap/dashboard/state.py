@@ -165,6 +165,7 @@ class DashboardState(param.Parameterized):
         if self.data is None or self._heatmap_pane is None:
             return
 
+        self._heatmap_pane.loading = True
         self._status_text = "Building..."
 
         try:
@@ -319,6 +320,8 @@ class DashboardState(param.Parameterized):
         except Exception as e:
             traceback.print_exc()
             self._status_text = f"Error: {e}"
+        finally:
+            self._heatmap_pane.loading = False
 
     @staticmethod
     def _compute_visual_gap_sizes(

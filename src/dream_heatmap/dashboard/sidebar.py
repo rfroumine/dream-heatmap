@@ -90,12 +90,6 @@ _SECTION_ICONS = {
         '<polyline points="6,8 10,3 14,8" fill="none"/>'
         '<polyline points="6,12 10,17 14,12" fill="none"/>'
     ),
-    "splits": (  # vertical dashed line (gap indicator)
-        '<line x1="10" y1="3" x2="10" y2="7" stroke-dasharray="2,2"/>'
-        '<line x1="10" y1="9" x2="10" y2="13" stroke-dasharray="2,2"/>'
-        '<line x1="10" y1="15" x2="10" y2="17" stroke-dasharray="2,2"/>'
-        '<line x1="5" y1="10" x2="15" y2="10"/>'
-    ),
     "charts": (  # bar chart
         '<rect x="3" y="10" width="3" height="7" rx="0.5" fill="none"/>'
         '<rect x="8.5" y="6" width="3" height="11" rx="0.5" fill="none"/>'
@@ -182,7 +176,6 @@ class SidebarControls:
         self.chart_manager = chart_manager
         self._syncing = False  # Guard flag: suppresses widget->state callbacks
         self._annotation_list_col = pn.Column(sizing_mode="stretch_width")
-        self._splits_list_col = pn.Column(sizing_mode="stretch_width")
         self._code_display = pn.pane.Markdown("", sizing_mode="stretch_width")
         self._build_widgets()
 
@@ -377,13 +370,6 @@ class SidebarControls:
             sizing_mode="stretch_width",
         )
 
-        # ── Step 4: Splits hint ──
-        self._splits_hint = pn.pane.Markdown(
-            "*Add an annotation for a grouping column to enable splits.*",
-            styles={"color": "#6b7280", "font-size": "11px"},
-            margin=(0, 0, 5, 0),
-        )
-
         # --- Export button ---
         self.export_button = pn.widgets.Button(
             name="Export as Code",
@@ -410,9 +396,8 @@ class SidebarControls:
             lambda e: self._auto_detect_style(), "value",
         )
 
-        # Build initial annotation list and splits display
+        # Build initial annotation list
         self._refresh_annotation_list()
-        self._refresh_splits_list()
 
     # --- Static helpers ---
 
@@ -630,8 +615,7 @@ class SidebarControls:
             row_group_by=new_group_by,
             row_cluster_mode="none",
         )
-
-        self._refresh_splits_list()
+        self._refresh_annotation_list()
 
     def _on_col_grouping_changed(self, event) -> None:
         """Handle col grouping primary or secondary change."""
@@ -679,8 +663,7 @@ class SidebarControls:
             col_group_by=new_group_by,
             col_cluster_mode="none",
         )
-
-        self._refresh_splits_list()
+        self._refresh_annotation_list()
 
     def _remove_auto_annotations_for_axis(self, axis: str) -> None:
         """Remove all auto-added annotations for the given axis.
@@ -851,6 +834,11 @@ class SidebarControls:
         else:
             edge = "top" if is_before else "bottom"
 
+        # Guard: max 3 annotations per edge
+        edge_count = sum(1 for a in self.state.annotations if a["edge"] == edge)
+        if edge_count >= 3:
+            return
+
         # Map style to internal type
         style = self.ann_style_select.value
         ann_type = "categorical" if style == "Color track" else "bar"
@@ -864,7 +852,6 @@ class SidebarControls:
         # Append to the annotations list (trigger param update)
         self.state.annotations = self.state.annotations + [cfg]
         self._refresh_annotation_list()
-        self._refresh_splits_list()
 
     def _on_remove_annotation(self, index: int) -> None:
         """Remove an annotation by index."""
@@ -873,7 +860,6 @@ class SidebarControls:
             anns.pop(index)
             self.state.annotations = anns
             self._refresh_annotation_list()
-            self._refresh_splits_list()
 
     # --- Export ---
 
@@ -927,12 +913,22 @@ class SidebarControls:
 
     # --- Step 4: Splits ---
 
-    def _on_split_toggled(self, idx: int, checked: bool) -> None:
-        """Handle split checkbox toggle on an annotation."""
+    def _on_split_toggled(self, idx: int, new_value: bool) -> None:
+        """Handle split toggle on an annotation card."""
         anns = list(self.state.annotations)
-        anns[idx] = {**anns[idx], "split": checked}
-        self.state.annotations = anns  # triggers _rebuild via param
-        self._refresh_splits_list()  # update disabled states
+        anns[idx] = {**anns[idx], "split": new_value}
+        self.state.annotations = anns  # triggers heatmap rebuild via param
+        self._refresh_annotation_list()  # re-render cards with updated button states
+
+    def _is_split_eligible(self, cfg: dict) -> bool:
+        """Check if annotation's column matches a grouping variable on its axis."""
+        edge = cfg["edge"]
+        col = cfg["column"]
+        if edge in ("left", "right"):
+            return col in set(self.state.row_group_by)
+        elif edge in ("top", "bottom"):
+            return col in set(self.state.col_group_by)
+        return False
 
     def _count_splits_for_axis(self, edge: str) -> int:
         """Count how many annotations have split=True for the same axis as edge."""
@@ -944,18 +940,8 @@ class SidebarControls:
             if cfg.get("split") and cfg["edge"] in target
         )
 
-    def _on_move_annotation(self, index: int, direction: int) -> None:
-        """Move annotation at index by direction (-1=up, +1=down)."""
-        anns = list(self.state.annotations)
-        new_index = index + direction
-        if 0 <= new_index < len(anns):
-            anns[index], anns[new_index] = anns[new_index], anns[index]
-            self.state.annotations = anns
-            self._refresh_annotation_list()
-            self._refresh_splits_list()
-
     def _refresh_annotation_list(self) -> None:
-        """Rebuild the annotation list display (Step 3 — no split toggles here)."""
+        """Rebuild the annotation list display with inline split toggles and grouping badges."""
         import html as _html
 
         anns = self.state.annotations
@@ -979,91 +965,59 @@ class SidebarControls:
             subtitle = f"{style_label} \u00b7 {edge_label}"
             esc_col = _html.escape(cfg["column"])
 
+            # Determine grouping role badge
+            role_badge = ""
+            if edge in ("left", "right"):
+                group_list = self.state.row_group_by
+            else:
+                group_list = self.state.col_group_by
+            if cfg["column"] in group_list:
+                rank = group_list.index(cfg["column"])
+                role = "Primary" if rank == 0 else "Secondary"
+                role_badge = (
+                    f' <span style="background:#eef2ff;color:#5c6ac4;font-size:9px;'
+                    f'padding:1px 5px;border-radius:3px;font-weight:500">{role}</span>'
+                )
+
             label_html = pn.pane.HTML(
                 f'<div style="font-size:12px;font-weight:500;color:#1e293b;overflow:hidden;'
                 f'text-overflow:ellipsis;white-space:nowrap">{esc_col}</div>'
-                f'<div style="font-size:10px;color:#94a3b8">{subtitle}</div>',
+                f'<div style="font-size:10px;color:#94a3b8">{subtitle}{role_badge}</div>',
                 sizing_mode="stretch_width", margin=0,
             )
 
-            up_btn = pn.widgets.Button(
-                name="\u25b2", width=24, height=24, button_type="light",
-                disabled=(i == 0), margin=(0, 0, 0, 0),
-            )
-            down_btn = pn.widgets.Button(
-                name="\u25bc", width=24, height=24, button_type="light",
-                disabled=(i == n - 1), margin=(0, 0, 0, 0),
-            )
+            # Split toggle (only for grouping-column annotations)
+            is_eligible = self._is_split_eligible(cfg)
+            split_btn = None
+            if is_eligible:
+                is_split = cfg.get("split", False)
+                splits_on_axis = self._count_splits_for_axis(edge)
+                split_disabled = (splits_on_axis >= 2 and not is_split)
+                split_btn = pn.widgets.Button(
+                    name="Split", width=46, height=24,
+                    button_type="primary" if is_split else "light",
+                    disabled=split_disabled,
+                    margin=(0, 0, 0, 0),
+                )
+                _is_split = is_split  # capture for closure
+                split_btn.on_click(lambda e, idx=i, s=_is_split: self._on_split_toggled(idx, not s))
+
             remove_btn = pn.widgets.Button(
                 name="\u00d7", width=24, height=24, button_type="light",
                 margin=(0, 0, 0, 0),
             )
+            remove_btn.on_click(lambda e, idx=i: self._on_remove_annotation(idx))
 
-            idx = i
-            up_btn.on_click(lambda e, idx=idx: self._on_move_annotation(idx, -1))
-            down_btn.on_click(lambda e, idx=idx: self._on_move_annotation(idx, +1))
-            remove_btn.on_click(lambda e, idx=idx: self._on_remove_annotation(idx))
-
+            buttons = [b for b in [split_btn, remove_btn] if b is not None]
             row = pn.Row(
                 label_html,
-                up_btn, down_btn, remove_btn,
+                *buttons,
                 sizing_mode="stretch_width",
                 styles={"background": "#f8fafc", "border-radius": "6px", "padding": "4px 6px"},
                 margin=(2, 0),
             )
             items.append(row)
         self._annotation_list_col.objects = items
-
-    def _refresh_splits_list(self) -> None:
-        """Rebuild the splits section (Step 4).
-
-        Only shows annotations whose column matches a grouping variable.
-        """
-        s = self.state
-        row_group_set = set(s.row_group_by)
-        col_group_set = set(s.col_group_by)
-        row_edges = ("left", "right")
-        col_edges = ("top", "bottom")
-
-        # Find eligible annotations
-        eligible = []
-        for i, cfg in enumerate(s.annotations):
-            edge = cfg["edge"]
-            col = cfg["column"]
-            if edge in row_edges and col in row_group_set:
-                eligible.append((i, cfg))
-            elif edge in col_edges and col in col_group_set:
-                eligible.append((i, cfg))
-
-        if not eligible:
-            self._splits_hint.visible = True
-            self._splits_list_col.objects = []
-            return
-
-        self._splits_hint.visible = False
-        items = []
-        for ann_idx, cfg in eligible:
-            edge = cfg["edge"]
-            is_split = cfg.get("split", False)
-            splits_on_axis = self._count_splits_for_axis(edge)
-            split_disabled = (splits_on_axis >= 2 and not is_split)
-
-            axis_label = "Rows" if edge in row_edges else "Columns"
-            cb_label = f"Show gap: {cfg['column']} ({axis_label})"
-
-            split_cb = pn.widgets.Checkbox(
-                name=cb_label, value=is_split,
-                disabled=split_disabled,
-                sizing_mode="stretch_width",
-                margin=(2, 0, 2, 0),
-            )
-            idx = ann_idx
-            split_cb.param.watch(
-                lambda e, idx=idx: self._on_split_toggled(idx, e.new), "value",
-            )
-            items.append(split_cb)
-
-        self._splits_list_col.objects = items
 
     def _build_charts_card(self) -> list:
         """Return the Charts card for the sidebar, or empty list if no chart_manager."""
@@ -1159,7 +1113,7 @@ class SidebarControls:
                 sizing_mode="stretch_width",
             ), "ordering", collapsed=False),
 
-            _make_section_card("Annotations", pn.Column(
+            _make_section_card("Annotations & Splits", pn.Column(
                 self.ann_axis_select,
                 self.ann_column_select,
                 self.ann_style_select,
@@ -1169,12 +1123,6 @@ class SidebarControls:
                 self._annotation_list_col,
                 sizing_mode="stretch_width",
             ), "annotations"),
-
-            _make_section_card("Splits", pn.Column(
-                self._splits_hint,
-                self._splits_list_col,
-                sizing_mode="stretch_width",
-            ), "splits"),
 
             *(self._build_charts_card()),
 
