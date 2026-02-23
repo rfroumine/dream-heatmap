@@ -33,8 +33,6 @@ ANNOTATION_AXES = ["Rows", "Columns"]
 ANNOTATION_STYLES = ["Color track", "Bar chart"]
 ANNOTATION_POSITIONS = ["Before", "After"]
 
-_CLUSTER_SENTINEL = "__cluster__"
-
 # ---------------------------------------------------------------------------
 # Shopify-inspired Card shadow-DOM CSS
 # ---------------------------------------------------------------------------
@@ -92,6 +90,12 @@ _SECTION_ICONS = {
         '<polyline points="6,8 10,3 14,8" fill="none"/>'
         '<polyline points="6,12 10,17 14,12" fill="none"/>'
     ),
+    "splits": (  # vertical dashed line (gap indicator)
+        '<line x1="10" y1="3" x2="10" y2="7" stroke-dasharray="2,2"/>'
+        '<line x1="10" y1="9" x2="10" y2="13" stroke-dasharray="2,2"/>'
+        '<line x1="10" y1="15" x2="10" y2="17" stroke-dasharray="2,2"/>'
+        '<line x1="5" y1="10" x2="15" y2="10"/>'
+    ),
     "charts": (  # bar chart
         '<rect x="3" y="10" width="3" height="7" rx="0.5" fill="none"/>'
         '<rect x="8.5" y="6" width="3" height="11" rx="0.5" fill="none"/>'
@@ -137,17 +141,18 @@ def _make_section_card(
 # Helper functions
 # ---------------------------------------------------------------------------
 
-def _build_order_options(meta_cols: list[str]) -> dict[str, str]:
-    opts = {"None": "", "Cluster": _CLUSTER_SENTINEL}
+def _build_grouping_options(meta_cols: list[str]) -> dict[str, str]:
+    """Build options for a grouping dropdown: None + metadata columns."""
+    opts = {"None": ""}
     for col in meta_cols:
         opts[col] = col
     return opts
 
 
-def _build_secondary_options(
+def _build_secondary_grouping_options(
     meta_cols: list[str], exclude: str = "",
 ) -> dict[str, str]:
-    """Build options for a secondary dropdown, excluding the primary selection."""
+    """Build options for secondary grouping, excluding the primary selection."""
     opts = {"None": ""}
     for col in meta_cols:
         if col != exclude:
@@ -157,6 +162,12 @@ def _build_secondary_options(
 
 class SidebarControls:
     """Builds and manages the sidebar Panel widgets.
+
+    Implements a 4-step workflow:
+    1. Grouping (per-axis, in tabs) — structural groups
+    2. Clustering (per-axis, in tabs) — within or global
+    3. Annotations (shared) — add/remove annotation tracks
+    4. Splits (shared) — visual gaps for grouping-column annotations
 
     Links widgets to DashboardState params so changes automatically
     trigger heatmap rebuilds.
@@ -171,6 +182,7 @@ class SidebarControls:
         self.chart_manager = chart_manager
         self._syncing = False  # Guard flag: suppresses widget->state callbacks
         self._annotation_list_col = pn.Column(sizing_mode="stretch_width")
+        self._splits_list_col = pn.Column(sizing_mode="stretch_width")
         self._code_display = pn.pane.Markdown("", sizing_mode="stretch_width")
         self._build_widgets()
 
@@ -250,81 +262,93 @@ class SidebarControls:
             sizing_mode="stretch_width",
         )
 
-        # --- Row Ordering section ---
-        order_rows_init = _CLUSTER_SENTINEL if s.cluster_rows else (s.order_rows_by or "")
-        self.order_rows_select = pn.widgets.Select(
-            name="Order by", value=order_rows_init,
-            options=_build_order_options(row_meta_cols), sizing_mode="stretch_width",
+        # ── Step 1+2: Grouping & Clustering (per-axis, in tabs) ──
+
+        # ROW grouping
+        row_primary_init = s.row_group_by[0] if len(s.row_group_by) >= 1 else ""
+        row_secondary_init = s.row_group_by[1] if len(s.row_group_by) >= 2 else ""
+
+        self.row_group_primary = pn.widgets.Select(
+            name="Primary", value=row_primary_init,
+            options=_build_grouping_options(row_meta_cols),
+            sizing_mode="stretch_width",
+            disabled=(s.row_metadata is None),
         )
-        self.order_rows_2_select = pn.widgets.Select(
-            name="Order by (2nd)", value=s.order_rows_by_2,
-            options=_build_secondary_options(row_meta_cols, exclude=s.order_rows_by),
-            visible=(bool(s.order_rows_by) and order_rows_init != _CLUSTER_SENTINEL),
+        self.row_group_secondary = pn.widgets.Select(
+            name="Secondary", value=row_secondary_init,
+            options=_build_secondary_grouping_options(row_meta_cols, exclude=row_primary_init),
+            visible=bool(row_primary_init),
             sizing_mode="stretch_width",
         )
-        self.show_row_dendro_toggle = pn.widgets.Checkbox(
-            name="Show dendrogram", value=s.show_row_dendro,
-            visible=(order_rows_init == _CLUSTER_SENTINEL),
+
+        # ROW clustering
+        row_cluster_options = self._cluster_options_for(s.row_group_by)
+        self.row_cluster_mode = pn.widgets.RadioButtonGroup(
+            name="Clustering", value=s.row_cluster_mode,
+            options=row_cluster_options,
+            sizing_mode="stretch_width",
         )
+        is_row_clustering = s.row_cluster_mode != "none"
         self.row_cluster_method_select = pn.widgets.Select(
             name="Method", value=s.cluster_method,
             options=CLUSTER_METHODS,
-            visible=(order_rows_init == _CLUSTER_SENTINEL),
+            visible=is_row_clustering,
             sizing_mode="stretch_width",
         )
         self.row_cluster_metric_select = pn.widgets.Select(
             name="Metric", value=s.cluster_metric,
             options=CLUSTER_METRICS,
-            visible=(order_rows_init == _CLUSTER_SENTINEL),
+            visible=is_row_clustering,
             sizing_mode="stretch_width",
         )
-        self.row_ordering_help_text = pn.pane.Markdown(
-            "*Ordering is applied within each split group.*",
-            styles={"color": "#6b7280", "font-size": "11px"},
-            margin=(0, 0, 5, 0),
+        self.show_row_dendro_toggle = pn.widgets.Checkbox(
+            name="Show dendrogram", value=s.show_row_dendro,
+            visible=is_row_clustering,
         )
 
-        # --- Column Ordering section ---
-        order_cols_init = _CLUSTER_SENTINEL if s.cluster_cols else (s.order_cols_by or "")
-        self.order_cols_select = pn.widgets.Select(
-            name="Order by", value=order_cols_init,
-            options=_build_order_options(col_meta_cols), sizing_mode="stretch_width",
+        # COL grouping
+        col_primary_init = s.col_group_by[0] if len(s.col_group_by) >= 1 else ""
+        col_secondary_init = s.col_group_by[1] if len(s.col_group_by) >= 2 else ""
+
+        self.col_group_primary = pn.widgets.Select(
+            name="Primary", value=col_primary_init,
+            options=_build_grouping_options(col_meta_cols),
+            sizing_mode="stretch_width",
+            disabled=(s.col_metadata is None),
         )
-        self.order_cols_2_select = pn.widgets.Select(
-            name="Order by (2nd)", value=s.order_cols_by_2,
-            options=_build_secondary_options(col_meta_cols, exclude=s.order_cols_by),
-            visible=(bool(s.order_cols_by) and order_cols_init != _CLUSTER_SENTINEL),
+        self.col_group_secondary = pn.widgets.Select(
+            name="Secondary", value=col_secondary_init,
+            options=_build_secondary_grouping_options(col_meta_cols, exclude=col_primary_init),
+            visible=bool(col_primary_init),
             sizing_mode="stretch_width",
         )
-        self.show_col_dendro_toggle = pn.widgets.Checkbox(
-            name="Show dendrogram", value=s.show_col_dendro,
-            visible=(order_cols_init == _CLUSTER_SENTINEL),
+
+        # COL clustering
+        col_cluster_options = self._cluster_options_for(s.col_group_by)
+        self.col_cluster_mode = pn.widgets.RadioButtonGroup(
+            name="Clustering", value=s.col_cluster_mode,
+            options=col_cluster_options,
+            sizing_mode="stretch_width",
         )
+        is_col_clustering = s.col_cluster_mode != "none"
         self.col_cluster_method_select = pn.widgets.Select(
             name="Method", value=s.cluster_method,
             options=CLUSTER_METHODS,
-            visible=(order_cols_init == _CLUSTER_SENTINEL),
+            visible=is_col_clustering,
             sizing_mode="stretch_width",
         )
         self.col_cluster_metric_select = pn.widgets.Select(
             name="Metric", value=s.cluster_metric,
             options=CLUSTER_METRICS,
-            visible=(order_cols_init == _CLUSTER_SENTINEL),
+            visible=is_col_clustering,
             sizing_mode="stretch_width",
         )
-        self.col_ordering_help_text = pn.pane.Markdown(
-            "*Ordering is applied within each split group.*",
-            styles={"color": "#6b7280", "font-size": "11px"},
-            margin=(0, 0, 5, 0),
+        self.show_col_dendro_toggle = pn.widgets.Checkbox(
+            name="Show dendrogram", value=s.show_col_dendro,
+            visible=is_col_clustering,
         )
 
-        # Disable ordering widgets when no metadata
-        if s.row_metadata is None:
-            self.order_rows_select.disabled = True
-        if s.col_metadata is None:
-            self.order_cols_select.disabled = True
-
-        # --- Annotation builder ---
+        # ── Step 3: Annotation builder ──
         self.ann_axis_select = pn.widgets.Select(
             name="Axis", options=ANNOTATION_AXES,
             value=ANNOTATION_AXES[0],
@@ -349,6 +373,13 @@ class SidebarControls:
         self.ann_add_button = pn.widgets.Button(
             name="+ Add", button_type="primary",
             sizing_mode="stretch_width",
+        )
+
+        # ── Step 4: Splits hint ──
+        self._splits_hint = pn.pane.Markdown(
+            "*Add an annotation for a grouping column to enable splits.*",
+            styles={"color": "#6b7280", "font-size": "11px"},
+            margin=(0, 0, 5, 0),
         )
 
         # --- Export button ---
@@ -377,8 +408,18 @@ class SidebarControls:
             lambda e: self._auto_detect_style(), "value",
         )
 
-        # Build initial annotation list display
+        # Build initial annotation list and splits display
         self._refresh_annotation_list()
+        self._refresh_splits_list()
+
+    # --- Static helpers ---
+
+    @staticmethod
+    def _cluster_options_for(group_by: list[str]) -> dict[str, str]:
+        """Return clustering radio options based on whether groups exist."""
+        if group_by:
+            return {"None": "none", "Within groups": "within_groups"}
+        return {"None": "none", "Global": "global"}
 
     def _set_state(self, attr: str, value) -> None:
         """Set state param only if not in a programmatic sync."""
@@ -418,34 +459,36 @@ class SidebarControls:
             lambda e: self._set_state("col_label_side", e.new), "value",
         )
 
-        # Row ordering
-        self.order_rows_select.param.watch(self._on_order_rows_changed, "value")
-        self.order_rows_2_select.param.watch(
-            lambda e: self._set_state("order_rows_by_2", e.new), "value",
+        # Row grouping
+        self.row_group_primary.param.watch(self._on_row_grouping_changed, "value")
+        self.row_group_secondary.param.watch(self._on_row_grouping_changed, "value")
+
+        # Row clustering
+        self.row_cluster_mode.param.watch(self._on_row_cluster_mode_changed, "value")
+        self.row_cluster_method_select.param.watch(
+            lambda e: self._on_cluster_param_changed("cluster_method", e.new), "value",
+        )
+        self.row_cluster_metric_select.param.watch(
+            lambda e: self._on_cluster_param_changed("cluster_metric", e.new), "value",
         )
         self.show_row_dendro_toggle.param.watch(
             lambda e: self._set_state("show_row_dendro", e.new), "value",
         )
-        self.row_cluster_method_select.param.watch(
-            lambda e: self._set_state("cluster_method", e.new), "value",
-        )
-        self.row_cluster_metric_select.param.watch(
-            lambda e: self._set_state("cluster_metric", e.new), "value",
-        )
 
-        # Column ordering
-        self.order_cols_select.param.watch(self._on_order_cols_changed, "value")
-        self.order_cols_2_select.param.watch(
-            lambda e: self._set_state("order_cols_by_2", e.new), "value",
+        # Col grouping
+        self.col_group_primary.param.watch(self._on_col_grouping_changed, "value")
+        self.col_group_secondary.param.watch(self._on_col_grouping_changed, "value")
+
+        # Col clustering
+        self.col_cluster_mode.param.watch(self._on_col_cluster_mode_changed, "value")
+        self.col_cluster_method_select.param.watch(
+            lambda e: self._on_cluster_param_changed("cluster_method", e.new), "value",
+        )
+        self.col_cluster_metric_select.param.watch(
+            lambda e: self._on_cluster_param_changed("cluster_metric", e.new), "value",
         )
         self.show_col_dendro_toggle.param.watch(
             lambda e: self._set_state("show_col_dendro", e.new), "value",
-        )
-        self.col_cluster_method_select.param.watch(
-            lambda e: self._set_state("cluster_method", e.new), "value",
-        )
-        self.col_cluster_metric_select.param.watch(
-            lambda e: self._set_state("cluster_metric", e.new), "value",
         )
 
         # Status text: watch state._status_text and update the pane
@@ -522,75 +565,161 @@ class SidebarControls:
         self.vmin_input.value = new_vmin
         self.vmax_input.value = new_vmax
 
-    # --- Ordering change handlers ---
+    # --- Grouping change handlers ---
 
-    def _on_order_rows_changed(self, event) -> None:
-        s = self.state
-        is_cluster = event.new == _CLUSTER_SENTINEL
-        if is_cluster:
-            s.param.update(cluster_rows=True, order_rows_by="", order_rows_by_2="")
-        else:
-            s.param.update(cluster_rows=False, order_rows_by=event.new, order_rows_by_2="")
+    def _collect_group_by(self, primary_widget, secondary_widget) -> list[str]:
+        """Collect the current group_by list from the primary + secondary widgets."""
+        result = []
+        if primary_widget.value:
+            result.append(primary_widget.value)
+        if secondary_widget.visible and secondary_widget.value:
+            result.append(secondary_widget.value)
+        return result
 
-        # Toggle visibility (no state impact)
-        self.show_row_dendro_toggle.visible = is_cluster
-        self.row_cluster_method_select.visible = is_cluster
-        self.row_cluster_metric_select.visible = is_cluster
+    def _on_row_grouping_changed(self, event) -> None:
+        """Handle row grouping primary or secondary change."""
+        if self._syncing:
+            return
 
-        # Reset secondary dropdown under guard so its watch doesn't fire
-        show_secondary = bool(event.new) and not is_cluster
+        primary = self.row_group_primary.value
+
+        # Show/hide secondary based on primary
         self._syncing = True
         try:
-            self.order_rows_2_select.param.update(
-                options=_build_secondary_options(
-                    s.get_row_metadata_columns(), exclude=event.new,
-                ),
-                value="",
-                visible=show_secondary,
-            )
+            if primary:
+                row_meta_cols = self.state.get_row_metadata_columns()
+                self.row_group_secondary.param.update(
+                    options=_build_secondary_grouping_options(row_meta_cols, exclude=primary),
+                    visible=True,
+                )
+            else:
+                self.row_group_secondary.param.update(value="", visible=False)
         finally:
             self._syncing = False
 
-        self._sync_cluster_widgets()
+        new_group_by = self._collect_group_by(self.row_group_primary, self.row_group_secondary)
 
-    def _on_order_cols_changed(self, event) -> None:
-        s = self.state
-        is_cluster = event.new == _CLUSTER_SENTINEL
-        if is_cluster:
-            s.param.update(cluster_cols=True, order_cols_by="", order_cols_by_2="")
-        else:
-            s.param.update(cluster_cols=False, order_cols_by=event.new, order_cols_by_2="")
-
-        self.show_col_dendro_toggle.visible = is_cluster
-        self.col_cluster_method_select.visible = is_cluster
-        self.col_cluster_metric_select.visible = is_cluster
-
-        show_secondary = bool(event.new) and not is_cluster
+        # Update cluster mode options (dynamic based on groups)
+        new_cluster_opts = self._cluster_options_for(new_group_by)
         self._syncing = True
         try:
-            self.order_cols_2_select.param.update(
-                options=_build_secondary_options(
-                    s.get_col_metadata_columns(), exclude=event.new,
-                ),
-                value="",
-                visible=show_secondary,
-            )
+            self.row_cluster_mode.param.update(options=new_cluster_opts, value="none")
+            self.row_cluster_method_select.visible = False
+            self.row_cluster_metric_select.visible = False
+            self.show_row_dendro_toggle.visible = False
         finally:
             self._syncing = False
 
-        self._sync_cluster_widgets()
+        # Clear splits for row axis annotations that no longer match grouping
+        self._clear_stale_splits_for_axis("row", new_group_by)
 
-    def _sync_cluster_widgets(self) -> None:
-        """Keep the cluster method/metric widgets in sync between both cards."""
+        # Atomic state update: grouping + clustering reset
+        self.state.param.update(
+            row_group_by=new_group_by,
+            row_cluster_mode="none",
+        )
+
+        self._refresh_splits_list()
+
+    def _on_col_grouping_changed(self, event) -> None:
+        """Handle col grouping primary or secondary change."""
+        if self._syncing:
+            return
+
+        primary = self.col_group_primary.value
+
+        # Show/hide secondary based on primary
         self._syncing = True
         try:
-            s = self.state
-            self.row_cluster_method_select.value = s.cluster_method
-            self.row_cluster_metric_select.value = s.cluster_metric
-            self.col_cluster_method_select.value = s.cluster_method
-            self.col_cluster_metric_select.value = s.cluster_metric
+            if primary:
+                col_meta_cols = self.state.get_col_metadata_columns()
+                self.col_group_secondary.param.update(
+                    options=_build_secondary_grouping_options(col_meta_cols, exclude=primary),
+                    visible=True,
+                )
+            else:
+                self.col_group_secondary.param.update(value="", visible=False)
         finally:
             self._syncing = False
+
+        new_group_by = self._collect_group_by(self.col_group_primary, self.col_group_secondary)
+
+        # Update cluster mode options (dynamic based on groups)
+        new_cluster_opts = self._cluster_options_for(new_group_by)
+        self._syncing = True
+        try:
+            self.col_cluster_mode.param.update(options=new_cluster_opts, value="none")
+            self.col_cluster_method_select.visible = False
+            self.col_cluster_metric_select.visible = False
+            self.show_col_dendro_toggle.visible = False
+        finally:
+            self._syncing = False
+
+        # Clear splits for col axis annotations that no longer match grouping
+        self._clear_stale_splits_for_axis("col", new_group_by)
+
+        # Atomic state update: grouping + clustering reset
+        self.state.param.update(
+            col_group_by=new_group_by,
+            col_cluster_mode="none",
+        )
+
+        self._refresh_splits_list()
+
+    def _clear_stale_splits_for_axis(self, axis: str, new_group_by: list[str]) -> None:
+        """Remove split=True from annotations whose column is not in new_group_by."""
+        row_edges = ("left", "right")
+        col_edges = ("top", "bottom")
+        target_edges = row_edges if axis == "row" else col_edges
+
+        anns = list(self.state.annotations)
+        changed = False
+        for i, cfg in enumerate(anns):
+            if cfg.get("split") and cfg["edge"] in target_edges:
+                if cfg["column"] not in new_group_by:
+                    anns[i] = {**cfg, "split": False}
+                    changed = True
+        if changed:
+            self.state.annotations = anns
+
+    # --- Clustering change handlers ---
+
+    def _on_row_cluster_mode_changed(self, event) -> None:
+        if self._syncing:
+            return
+        mode = event.new
+        is_clustering = mode != "none"
+        self.row_cluster_method_select.visible = is_clustering
+        self.row_cluster_metric_select.visible = is_clustering
+        self.show_row_dendro_toggle.visible = is_clustering
+        self._set_state("row_cluster_mode", mode)
+
+    def _on_col_cluster_mode_changed(self, event) -> None:
+        if self._syncing:
+            return
+        mode = event.new
+        is_clustering = mode != "none"
+        self.col_cluster_method_select.visible = is_clustering
+        self.col_cluster_metric_select.visible = is_clustering
+        self.show_col_dendro_toggle.visible = is_clustering
+        self._set_state("col_cluster_mode", mode)
+
+    def _on_cluster_param_changed(self, param_name: str, value: str) -> None:
+        """Handle cluster method/metric change — synced between axes."""
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            # Sync the other axis's widget
+            if param_name == "cluster_method":
+                self.row_cluster_method_select.value = value
+                self.col_cluster_method_select.value = value
+            elif param_name == "cluster_metric":
+                self.row_cluster_metric_select.value = value
+                self.col_cluster_metric_select.value = value
+        finally:
+            self._syncing = False
+        self._set_state(param_name, value)
 
     # --- Annotation helpers ---
 
@@ -659,6 +788,7 @@ class SidebarControls:
         # Append to the annotations list (trigger param update)
         self.state.annotations = self.state.annotations + [cfg]
         self._refresh_annotation_list()
+        self._refresh_splits_list()
 
     def _on_remove_annotation(self, index: int) -> None:
         """Remove an annotation by index."""
@@ -667,6 +797,7 @@ class SidebarControls:
             anns.pop(index)
             self.state.annotations = anns
             self._refresh_annotation_list()
+            self._refresh_splits_list()
 
     # --- Export ---
 
@@ -718,12 +849,14 @@ class SidebarControls:
         except Exception:
             pass
 
+    # --- Step 4: Splits ---
+
     def _on_split_toggled(self, idx: int, checked: bool) -> None:
         """Handle split checkbox toggle on an annotation."""
         anns = list(self.state.annotations)
         anns[idx] = {**anns[idx], "split": checked}
         self.state.annotations = anns  # triggers _rebuild via param
-        self._refresh_annotation_list()  # update disabled states
+        self._refresh_splits_list()  # update disabled states
 
     def _count_splits_for_axis(self, edge: str) -> int:
         """Count how many annotations have split=True for the same axis as edge."""
@@ -736,30 +869,7 @@ class SidebarControls:
         )
 
     def _refresh_annotation_list(self) -> None:
-        """Rebuild the annotation list display with split toggles."""
-        # Pre-compute split rank per axis for Primary/Secondary labels
-        row_edges = ("left", "right")
-        col_edges = ("top", "bottom")
-        row_split_indices = [
-            i for i, cfg in enumerate(self.state.annotations)
-            if cfg.get("split") and cfg["edge"] in row_edges
-        ]
-        col_split_indices = [
-            i for i, cfg in enumerate(self.state.annotations)
-            if cfg.get("split") and cfg["edge"] in col_edges
-        ]
-
-        def _split_label(idx: int, edge: str) -> str:
-            target = row_split_indices if edge in row_edges else col_split_indices
-            if idx not in target:
-                return "Split"
-            rank = target.index(idx)
-            if rank == 0 and len(target) > 1:
-                return "Split (Primary)"
-            elif rank == 1:
-                return "Split (Secondary)"
-            return "Split"
-
+        """Rebuild the annotation list display (Step 3 — no split toggles here)."""
         items = []
         for i, cfg in enumerate(self.state.annotations):
             style_label = "Color track" if cfg["type"] == "categorical" else "Bar chart"
@@ -768,35 +878,70 @@ class SidebarControls:
                           "top": "Columns, before", "bottom": "Columns, after"}.get(edge, edge)
             label = f"{cfg['column']} \u2014 {style_label} ({edge_label})"
 
-            is_split = cfg.get("split", False)
-            splits_on_axis = self._count_splits_for_axis(edge)
-            # Disable if already 2 splits on this axis and this one isn't checked
-            split_disabled = (splits_on_axis >= 2 and not is_split)
-
-            cb_name = _split_label(i, edge)
-            split_cb = pn.widgets.Checkbox(
-                name=cb_name, value=is_split,
-                width=120, disabled=split_disabled,
-                margin=(0, 5, 0, 5),
-            )
-            idx = i
-            split_cb.param.watch(
-                lambda e, idx=idx: self._on_split_toggled(idx, e.new), "value",
-            )
-
             remove_btn = pn.widgets.Button(
                 name="\u00d7", width=30, button_type="danger",
                 margin=(0, 0, 0, 5),
             )
+            idx = i
             remove_btn.on_click(lambda e, idx=idx: self._on_remove_annotation(idx))
             row = pn.Row(
                 pn.pane.Str(label, sizing_mode="stretch_width"),
-                split_cb,
                 remove_btn,
                 sizing_mode="stretch_width",
             )
             items.append(row)
         self._annotation_list_col.objects = items
+
+    def _refresh_splits_list(self) -> None:
+        """Rebuild the splits section (Step 4).
+
+        Only shows annotations whose column matches a grouping variable.
+        """
+        s = self.state
+        row_group_set = set(s.row_group_by)
+        col_group_set = set(s.col_group_by)
+        row_edges = ("left", "right")
+        col_edges = ("top", "bottom")
+
+        # Find eligible annotations
+        eligible = []
+        for i, cfg in enumerate(s.annotations):
+            edge = cfg["edge"]
+            col = cfg["column"]
+            if edge in row_edges and col in row_group_set:
+                eligible.append((i, cfg))
+            elif edge in col_edges and col in col_group_set:
+                eligible.append((i, cfg))
+
+        if not eligible:
+            self._splits_hint.visible = True
+            self._splits_list_col.objects = []
+            return
+
+        self._splits_hint.visible = False
+        items = []
+        for ann_idx, cfg in eligible:
+            edge = cfg["edge"]
+            is_split = cfg.get("split", False)
+            splits_on_axis = self._count_splits_for_axis(edge)
+            split_disabled = (splits_on_axis >= 2 and not is_split)
+
+            axis_label = "Rows" if edge in row_edges else "Columns"
+            cb_label = f"Show gap: {cfg['column']} ({axis_label})"
+
+            split_cb = pn.widgets.Checkbox(
+                name=cb_label, value=is_split,
+                disabled=split_disabled,
+                sizing_mode="stretch_width",
+                margin=(2, 0, 2, 0),
+            )
+            idx = ann_idx
+            split_cb.param.watch(
+                lambda e, idx=idx: self._on_split_toggled(idx, e.new), "value",
+            )
+            items.append(split_cb)
+
+        self._splits_list_col.objects = items
 
     def _build_charts_card(self) -> list:
         """Return the Charts card for the sidebar, or empty list if no chart_manager."""
@@ -828,6 +973,50 @@ class SidebarControls:
             sizing_mode="stretch_width",
             margin=(0, 0, 8, 0),
         )
+
+        # --- Step headers (small, muted) ---
+        def _step_label(num: int, text: str) -> pn.pane.HTML:
+            return pn.pane.HTML(
+                f'<div style="font-size:11px;font-weight:500;color:#919eab;'
+                f'margin:4px 0 2px 0">Step {num}: {text}</div>',
+                sizing_mode="stretch_width", margin=0,
+            )
+
+        # --- Tabbed Rows/Columns section (Steps 1+2) ---
+        rows_tab_content = pn.Column(
+            _step_label(1, "Group by"),
+            self.row_group_primary,
+            self.row_group_secondary,
+            pn.layout.Divider(),
+            _step_label(2, "Clustering"),
+            self.row_cluster_mode,
+            self.row_cluster_method_select,
+            self.row_cluster_metric_select,
+            self.show_row_dendro_toggle,
+            sizing_mode="stretch_width",
+        )
+
+        cols_tab_content = pn.Column(
+            _step_label(1, "Group by"),
+            self.col_group_primary,
+            self.col_group_secondary,
+            pn.layout.Divider(),
+            _step_label(2, "Clustering"),
+            self.col_cluster_mode,
+            self.col_cluster_method_select,
+            self.col_cluster_metric_select,
+            self.show_col_dendro_toggle,
+            sizing_mode="stretch_width",
+        )
+
+        grouping_tabs = pn.Tabs(
+            ("Rows", rows_tab_content),
+            ("Columns", cols_tab_content),
+            sizing_mode="stretch_width",
+            margin=(0, 0, 0, 0),
+            dynamic=True,
+        )
+
         return pn.Column(
             header_row,
 
@@ -847,7 +1036,12 @@ class SidebarControls:
                 sizing_mode="stretch_width",
             ), "labels"),
 
-            _make_section_card("Annotations & Splits", pn.Column(
+            _make_section_card("Grouping & Clustering", pn.Column(
+                grouping_tabs,
+                sizing_mode="stretch_width",
+            ), "ordering", collapsed=False),
+
+            _make_section_card("Annotations", pn.Column(
                 self.ann_axis_select,
                 self.ann_column_select,
                 self.ann_style_select,
@@ -858,25 +1052,11 @@ class SidebarControls:
                 sizing_mode="stretch_width",
             ), "annotations"),
 
-            _make_section_card("Row Ordering", pn.Column(
-                self.order_rows_select,
-                self.order_rows_2_select,
-                self.show_row_dendro_toggle,
-                self.row_cluster_method_select,
-                self.row_cluster_metric_select,
-                self.row_ordering_help_text,
+            _make_section_card("Splits", pn.Column(
+                self._splits_hint,
+                self._splits_list_col,
                 sizing_mode="stretch_width",
-            ), "ordering"),
-
-            _make_section_card("Column Ordering", pn.Column(
-                self.order_cols_select,
-                self.order_cols_2_select,
-                self.show_col_dendro_toggle,
-                self.col_cluster_method_select,
-                self.col_cluster_metric_select,
-                self.col_ordering_help_text,
-                sizing_mode="stretch_width",
-            ), "ordering"),
+            ), "splits"),
 
             *(self._build_charts_card()),
 

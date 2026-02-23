@@ -70,29 +70,20 @@ def generate_code(state: DashboardState) -> str:
             parts.append(f"vmax={state.vmax}")
         lines.append(f"hm.set_colormap({', '.join(parts)})")
 
-    # Splits — derived from annotation split flags
-    split_rows = [
-        cfg["column"] for cfg in state.annotations
-        if cfg.get("split") and cfg.get("edge") in ("left", "right")
-    ][:2]
-    if split_rows:
-        if len(split_rows) == 1:
-            lines.append(f'hm.split_rows(by="{split_rows[0]}")')
+    # Step 1: Grouping — structural splits from group_by
+    if state.row_group_by:
+        if len(state.row_group_by) == 1:
+            lines.append(f'hm.split_rows(by="{state.row_group_by[0]}")')
         else:
-            lines.append(f'hm.split_rows(by={split_rows})')
-
-    split_cols = [
-        cfg["column"] for cfg in state.annotations
-        if cfg.get("split") and cfg.get("edge") in ("top", "bottom")
-    ][:2]
-    if split_cols:
-        if len(split_cols) == 1:
-            lines.append(f'hm.split_cols(by="{split_cols[0]}")')
+            lines.append(f'hm.split_rows(by={state.row_group_by})')
+    if state.col_group_by:
+        if len(state.col_group_by) == 1:
+            lines.append(f'hm.split_cols(by="{state.col_group_by[0]}")')
         else:
-            lines.append(f'hm.split_cols(by={split_cols})')
+            lines.append(f'hm.split_cols(by={state.col_group_by})')
 
-    # Clustering vs ordering (mutually exclusive per axis)
-    if state.cluster_rows:
+    # Step 2: Clustering
+    if state.row_cluster_mode in ("global", "within_groups"):
         parts = []
         if state.cluster_method != "average":
             parts.append(f'method="{state.cluster_method}"')
@@ -100,14 +91,8 @@ def generate_code(state: DashboardState) -> str:
             parts.append(f'metric="{state.cluster_metric}"')
         args = ", ".join(parts)
         lines.append(f"hm.cluster_rows({args})")
-    elif state.order_rows_by:
-        order_rows = [v for v in [state.order_rows_by, state.order_rows_by_2] if v]
-        if len(order_rows) == 1:
-            lines.append(f'hm.order_rows(by="{order_rows[0]}")')
-        else:
-            lines.append(f'hm.order_rows(by={order_rows})')
 
-    if state.cluster_cols:
+    if state.col_cluster_mode in ("global", "within_groups"):
         parts = []
         if state.cluster_method != "average":
             parts.append(f'method="{state.cluster_method}"')
@@ -115,12 +100,6 @@ def generate_code(state: DashboardState) -> str:
             parts.append(f'metric="{state.cluster_metric}"')
         args = ", ".join(parts)
         lines.append(f"hm.cluster_cols({args})")
-    elif state.order_cols_by:
-        order_cols = [v for v in [state.order_cols_by, state.order_cols_by_2] if v]
-        if len(order_cols) == 1:
-            lines.append(f'hm.order_cols(by="{order_cols[0]}")')
-        else:
-            lines.append(f'hm.order_cols(by={order_cols})')
 
     # Labels (mode + side, only if non-default)
     has_non_default_labels = (
@@ -183,10 +162,15 @@ def generate_code(state: DashboardState) -> str:
                     )
 
     # Dendrogram visibility (comment hint if non-default)
-    if state.cluster_rows and not state.show_row_dendro:
+    if state.row_cluster_mode != "none" and not state.show_row_dendro:
         lines.append("# Note: row dendrogram hidden in dashboard (no API toggle yet)")
-    if state.cluster_cols and not state.show_col_dendro:
+    if state.col_cluster_mode != "none" and not state.show_col_dendro:
         lines.append("# Note: col dendrogram hidden in dashboard (no API toggle yet)")
+
+    # Note about gap sizes for splits (if any annotations have split=True)
+    has_splits = any(cfg.get("split") for cfg in state.annotations)
+    if has_splits:
+        lines.append("# Note: visual gaps (splits) are applied automatically by split_rows/split_cols above")
 
     lines.append("")
     lines.append("# Display")

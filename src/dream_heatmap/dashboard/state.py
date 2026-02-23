@@ -37,19 +37,18 @@ class DashboardState(param.Parameterized):
     row_scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
     col_scale_method = param.String(default="none")   # "none", "zscore", "center", "minmax"
 
-    # (Splits are derived from annotation split flags — no dedicated params needed)
+    # --- Grouping (replaces order_rows_by/order_cols_by) ---
+    row_group_by = param.List(default=[])    # 0-2 metadata column names
+    col_group_by = param.List(default=[])    # 0-2 metadata column names
 
-    # --- Clustering ---
-    cluster_rows = param.Boolean(default=False)
-    cluster_cols = param.Boolean(default=False)
+    # --- Cluster mode (replaces cluster_rows/cluster_cols booleans) ---
+    # "none" | "global" | "within_groups"
+    row_cluster_mode = param.String(default="none")
+    col_cluster_mode = param.String(default="none")
+
+    # --- Clustering params (shared, synced between axes) ---
     cluster_method = param.String(default="average")
     cluster_metric = param.String(default="euclidean")
-
-    # --- Ordering ---
-    order_rows_by = param.String(default="")
-    order_cols_by = param.String(default="")
-    order_rows_by_2 = param.String(default="")
-    order_cols_by_2 = param.String(default="")
 
     # --- Labels ---
     row_labels = param.String(default="auto")
@@ -145,9 +144,9 @@ class DashboardState(param.Parameterized):
     @param.depends(
         "colormap", "vmin", "vmax",
         "row_scale_method", "col_scale_method",
-        "cluster_rows", "cluster_cols", "cluster_method", "cluster_metric",
-        "order_rows_by", "order_cols_by",
-        "order_rows_by_2", "order_cols_by_2",
+        "row_group_by", "col_group_by",
+        "row_cluster_mode", "col_cluster_mode",
+        "cluster_method", "cluster_metric",
         "row_labels", "col_labels",
         "row_label_side", "col_label_side",
         "show_row_dendro", "show_col_dendro",
@@ -155,7 +154,14 @@ class DashboardState(param.Parameterized):
         watch=True,
     )
     def _rebuild_heatmap(self):
-        """Rebuild the Heatmap object from current state and push to pane."""
+        """Rebuild the Heatmap object from current state and push to pane.
+
+        Follows the 4-step workflow:
+        1. Grouping — structural groups via split_rows/split_cols (gap=0 by default)
+        2. Clustering — none / global / within_groups
+        3. Annotations — add annotation tracks
+        4. Splits — visual gaps only for annotations with split=True on grouping vars
+        """
         if self.data is None or self._heatmap_pane is None:
             return
 
@@ -201,28 +207,21 @@ class DashboardState(param.Parameterized):
                 color_bar_title=color_bar_title,
             )
 
-            # Derive splits from annotation split flags
-            row_splits = [
-                cfg["column"] for cfg in self.annotations
-                if cfg.get("split") and cfg["edge"] in ("left", "right")
-            ][:2]
-            col_splits = [
-                cfg["column"] for cfg in self.annotations
-                if cfg.get("split") and cfg["edge"] in ("top", "bottom")
-            ][:2]
+            # ── Step 1: Grouping ──
+            # Apply structural groups (always, even without visual gaps).
+            # Groups create split boundaries that sort data by group values.
+            if self.row_group_by:
+                by = self.row_group_by if len(self.row_group_by) > 1 else self.row_group_by[0]
+                hm.split_rows(by=by)
+            if self.col_group_by:
+                by = self.col_group_by if len(self.col_group_by) > 1 else self.col_group_by[0]
+                hm.split_cols(by=by)
 
-            # Apply splits
-            if row_splits:
-                hm.split_rows(by=row_splits if len(row_splits) > 1 else row_splits[0])
-            if col_splits:
-                hm.split_cols(by=col_splits if len(col_splits) > 1 else col_splits[0])
+            # ── Step 2: Clustering ──
+            row_cache_key = (tuple(self.row_group_by), self.row_cluster_mode, self.cluster_method, self.cluster_metric)
+            col_cache_key = (tuple(self.col_group_by), self.col_cluster_mode, self.cluster_method, self.cluster_metric)
 
-            # Per-axis cluster cache keys
-            row_cache_key = (tuple(row_splits), self.cluster_method, self.cluster_metric)
-            col_cache_key = (tuple(col_splits), self.cluster_method, self.cluster_metric)
-
-            # Clustering vs ordering (mutually exclusive per axis)
-            if self.cluster_rows:
+            if self.row_cluster_mode in ("global", "within_groups"):
                 if row_cache_key == self._row_cluster_cache_key and self._cached_row_cluster is not None:
                     hm._row_cluster, hm._row_mapper = self._cached_row_cluster
                 else:
@@ -232,11 +231,8 @@ class DashboardState(param.Parameterized):
                         metric=self.cluster_metric,
                     )
                     self._cached_row_cluster = (hm._row_cluster, hm._row_mapper)
-            elif self.order_rows_by:
-                order_rows = [v for v in [self.order_rows_by, self.order_rows_by_2] if v]
-                hm.order_rows(by=order_rows if len(order_rows) > 1 else order_rows[0])
 
-            if self.cluster_cols:
+            if self.col_cluster_mode in ("global", "within_groups"):
                 if col_cache_key == self._col_cluster_cache_key and self._cached_col_cluster is not None:
                     hm._col_cluster, hm._col_mapper = self._cached_col_cluster
                 else:
@@ -246,18 +242,39 @@ class DashboardState(param.Parameterized):
                         metric=self.cluster_metric,
                     )
                     self._cached_col_cluster = (hm._col_cluster, hm._col_mapper)
-            elif self.order_cols_by:
-                order_cols = [v for v in [self.order_cols_by, self.order_cols_by_2] if v]
-                hm.order_cols(by=order_cols if len(order_cols) > 1 else order_cols[0])
 
             self._row_cluster_cache_key = row_cache_key
             self._col_cluster_cache_key = col_cache_key
 
-            # Annotations
+            # ── Step 3: Annotations ──
             for ann_cfg in self.annotations:
                 annotation = self._build_annotation(ann_cfg)
                 if annotation is not None:
                     hm.add_annotation(ann_cfg["edge"], annotation)
+
+            # ── Step 4: Visual gaps (splits) ──
+            # By default, all group boundaries have gap_size=0 (invisible).
+            # Only annotations with split=True on a grouping variable get non-zero gaps.
+            row_split_cols = {
+                cfg["column"] for cfg in self.annotations
+                if cfg.get("split") and cfg["edge"] in ("left", "right")
+                and cfg["column"] in self.row_group_by
+            }
+            col_split_cols = {
+                cfg["column"] for cfg in self.annotations
+                if cfg.get("split") and cfg["edge"] in ("top", "bottom")
+                and cfg["column"] in self.col_group_by
+            }
+
+            # Set gap sizes: 0 for non-split boundaries, PRIMARY/SECONDARY for split ones
+            if self.row_group_by and hm._row_mapper.gap_positions:
+                hm._row_gap_sizes = self._compute_visual_gap_sizes(
+                    hm._row_mapper, self.row_group_by, row_split_cols,
+                )
+            if self.col_group_by and hm._col_mapper.gap_positions:
+                hm._col_gap_sizes = self._compute_visual_gap_sizes(
+                    hm._col_mapper, self.col_group_by, col_split_cols,
+                )
 
             # Labels (mode + side)
             hm.set_label_display(
@@ -292,6 +309,49 @@ class DashboardState(param.Parameterized):
         except Exception as e:
             traceback.print_exc()
             self._status_text = f"Error: {e}"
+
+    @staticmethod
+    def _compute_visual_gap_sizes(
+        mapper, group_by: list[str], split_cols: set[str],
+    ) -> dict[int, float]:
+        """Compute per-boundary gap sizes for the 4-step workflow.
+
+        Boundaries whose grouping variable is in split_cols get visible gaps;
+        all others get gap_size=0 (invisible structural groups).
+        """
+        groups = mapper.groups
+        if not groups:
+            return {}
+        gap_sizes: dict[int, float] = {}
+        running = 0
+        has_two_levels = len(group_by) >= 2
+        prev_primary = None
+
+        for group in groups:
+            if running > 0:
+                # Determine which level this boundary represents
+                current_primary = group.name.split("|")[0]
+                if has_two_levels and current_primary != prev_primary:
+                    # Primary boundary — visible if primary grouping var is a split col
+                    if group_by[0] in split_cols:
+                        gap_sizes[running] = Heatmap.PRIMARY_GAP_PX
+                    else:
+                        gap_sizes[running] = 0.0
+                elif has_two_levels:
+                    # Secondary boundary — visible if secondary grouping var is a split col
+                    if group_by[1] in split_cols:
+                        gap_sizes[running] = Heatmap.SECONDARY_GAP_PX
+                    else:
+                        gap_sizes[running] = 0.0
+                else:
+                    # Single-level grouping — visible if that var is a split col
+                    if group_by[0] in split_cols:
+                        gap_sizes[running] = Heatmap.PRIMARY_GAP_PX
+                    else:
+                        gap_sizes[running] = 0.0
+            prev_primary = group.name.split("|")[0]
+            running += len(group.ids)
+        return gap_sizes
 
     def _build_annotation(self, cfg: dict) -> Any:
         """Build an AnnotationTrack from a config dict."""
