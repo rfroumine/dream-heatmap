@@ -60,6 +60,12 @@ class SplitEngine:
                 groups[key] = []
             groups[key].append(idx)
 
+        # For multi-column splits, sort keys hierarchically so groups
+        # with the same primary value stay contiguous.
+        if len(by) >= 2:
+            sorted_keys = sorted(groups.keys(), key=lambda k: tuple(k.split("|")))
+            groups = OrderedDict((k, groups[k]) for k in sorted_keys)
+
         return dict(groups)
 
     @staticmethod

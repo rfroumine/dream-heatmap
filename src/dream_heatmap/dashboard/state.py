@@ -81,11 +81,11 @@ class DashboardState(param.Parameterized):
 
     def __init__(self, **params):
         super().__init__(**params)
-        # Per-axis cluster caches (changing row splits won't invalidate col cache)
-        self._row_cluster_cache_key = None
-        self._col_cluster_cache_key = None
-        self._cached_row_cluster = None  # (cluster_results, mapper)
-        self._cached_col_cluster = None  # (cluster_results, mapper)
+        # Per-axis cluster caches: {cache_key: (cluster_results, mapper)}
+        # Multi-entry so switching grouping A→B→A reuses cached results.
+        self._row_cluster_cache: dict[tuple, tuple] = {}
+        self._col_cluster_cache: dict[tuple, tuple] = {}
+        self._MAX_CLUSTER_CACHE = 8
 
     def get_row_metadata_columns(self) -> list[str]:
         """Return available row metadata column names."""
@@ -218,33 +218,43 @@ class DashboardState(param.Parameterized):
                 hm.split_cols(by=by)
 
             # ── Step 2: Clustering ──
-            row_cache_key = (tuple(self.row_group_by), self.row_cluster_mode, self.cluster_method, self.cluster_metric)
-            col_cache_key = (tuple(self.col_group_by), self.col_cluster_mode, self.cluster_method, self.cluster_metric)
+            # Cache keys include scaling params since scaling affects the matrix
+            row_cache_key = (
+                tuple(self.row_group_by), self.row_cluster_mode,
+                self.cluster_method, self.cluster_metric,
+                self.row_scale_method, self.col_scale_method,
+            )
+            col_cache_key = (
+                tuple(self.col_group_by), self.col_cluster_mode,
+                self.cluster_method, self.cluster_metric,
+                self.row_scale_method, self.col_scale_method,
+            )
 
             if self.row_cluster_mode in ("global", "within_groups"):
-                if row_cache_key == self._row_cluster_cache_key and self._cached_row_cluster is not None:
-                    hm._row_cluster, hm._row_mapper = self._cached_row_cluster
+                if row_cache_key in self._row_cluster_cache:
+                    hm._row_cluster, hm._row_mapper = self._row_cluster_cache[row_cache_key]
                 else:
                     self._status_text = "Clustering rows..."
                     hm.cluster_rows(
                         method=self.cluster_method,
                         metric=self.cluster_metric,
                     )
-                    self._cached_row_cluster = (hm._row_cluster, hm._row_mapper)
+                    self._row_cluster_cache[row_cache_key] = (hm._row_cluster, hm._row_mapper)
+                    if len(self._row_cluster_cache) > self._MAX_CLUSTER_CACHE:
+                        del self._row_cluster_cache[next(iter(self._row_cluster_cache))]
 
             if self.col_cluster_mode in ("global", "within_groups"):
-                if col_cache_key == self._col_cluster_cache_key and self._cached_col_cluster is not None:
-                    hm._col_cluster, hm._col_mapper = self._cached_col_cluster
+                if col_cache_key in self._col_cluster_cache:
+                    hm._col_cluster, hm._col_mapper = self._col_cluster_cache[col_cache_key]
                 else:
                     self._status_text = "Clustering columns..."
                     hm.cluster_cols(
                         method=self.cluster_method,
                         metric=self.cluster_metric,
                     )
-                    self._cached_col_cluster = (hm._col_cluster, hm._col_mapper)
-
-            self._row_cluster_cache_key = row_cache_key
-            self._col_cluster_cache_key = col_cache_key
+                    self._col_cluster_cache[col_cache_key] = (hm._col_cluster, hm._col_mapper)
+                    if len(self._col_cluster_cache) > self._MAX_CLUSTER_CACHE:
+                        del self._col_cluster_cache[next(iter(self._col_cluster_cache))]
 
             # ── Step 3: Annotations ──
             for ann_cfg in self.annotations:

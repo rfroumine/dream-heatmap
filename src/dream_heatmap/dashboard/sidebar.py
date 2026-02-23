@@ -610,6 +610,10 @@ class SidebarControls:
         finally:
             self._syncing = False
 
+        # Remove stale auto-annotations, then add new ones
+        self._remove_auto_annotations_for_axis("row")
+        self._auto_add_grouping_annotations("row", new_group_by)
+
         # Clear splits for row axis annotations that no longer match grouping
         self._clear_stale_splits_for_axis("row", new_group_by)
 
@@ -655,6 +659,10 @@ class SidebarControls:
         finally:
             self._syncing = False
 
+        # Remove stale auto-annotations, then add new ones
+        self._remove_auto_annotations_for_axis("col")
+        self._auto_add_grouping_annotations("col", new_group_by)
+
         # Clear splits for col axis annotations that no longer match grouping
         self._clear_stale_splits_for_axis("col", new_group_by)
 
@@ -665,6 +673,66 @@ class SidebarControls:
         )
 
         self._refresh_splits_list()
+
+    def _remove_auto_annotations_for_axis(self, axis: str) -> None:
+        """Remove all auto-added annotations for the given axis.
+
+        Parameters
+        ----------
+        axis : str
+            ``"row"`` or ``"col"``.
+        """
+        row_edges = ("left", "right")
+        col_edges = ("top", "bottom")
+        target_edges = row_edges if axis == "row" else col_edges
+
+        filtered = [
+            cfg for cfg in self.state.annotations
+            if not (cfg.get("auto") and cfg["edge"] in target_edges)
+        ]
+        if len(filtered) != len(self.state.annotations):
+            self.state.annotations = filtered
+            self._refresh_annotation_list()
+
+    def _auto_add_grouping_annotations(self, axis: str, group_by: list[str]) -> None:
+        """Auto-add categorical annotations for grouping columns if not already present.
+
+        Parameters
+        ----------
+        axis : str
+            ``"row"`` or ``"col"``.
+        group_by : list[str]
+            Current grouping columns for this axis.
+        """
+        if not group_by:
+            return
+
+        row_edges = ("left", "right")
+        col_edges = ("top", "bottom")
+        target_edges = row_edges if axis == "row" else col_edges
+        default_edge = "left" if axis == "row" else "top"
+
+        # Collect columns already annotated on this axis
+        existing_cols = {
+            cfg["column"]
+            for cfg in self.state.annotations
+            if cfg["edge"] in target_edges
+        }
+
+        new_anns = []
+        for col in group_by:
+            if col not in existing_cols:
+                new_anns.append({
+                    "type": "categorical",
+                    "edge": default_edge,
+                    "column": col,
+                    "name": col,
+                    "auto": True,
+                })
+
+        if new_anns:
+            self.state.annotations = self.state.annotations + new_anns
+            self._refresh_annotation_list()
 
     def _clear_stale_splits_for_axis(self, axis: str, new_group_by: list[str]) -> None:
         """Remove split=True from annotations whose column is not in new_group_by."""

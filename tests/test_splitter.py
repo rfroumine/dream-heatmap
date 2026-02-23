@@ -60,13 +60,32 @@ class TestSplitEngineByMultipleColumns:
         expected_ids = pd.Index(["r1", "r2", "r3", "r4"])
         meta = MetadataFrame(meta_df, expected_ids, "row")
         result = SplitEngine.split(meta, ["type", "batch"])
-        # Keys are "type|batch"
-        assert "T|1" in result
-        assert "T|2" in result
-        assert "B|1" in result
-        assert "B|2" in result
+        # Keys are "type|batch", sorted hierarchically (primary then secondary)
+        assert list(result.keys()) == ["B|1", "B|2", "T|1", "T|2"]
         assert result["T|1"] == ["r1"]
         assert result["T|2"] == ["r2"]
+        assert result["B|1"] == ["r3"]
+        assert result["B|2"] == ["r4"]
+
+    def test_two_column_split_interleaved(self):
+        """Groups with the same primary value stay contiguous even when interleaved."""
+        meta_df = pd.DataFrame(
+            {
+                "cell_type": ["B-cell", "T-cell", "T-cell", "B-cell"],
+                "match_type": ["exact", "partial", "exact", "partial"],
+            },
+            index=["r1", "r2", "r3", "r4"],
+        )
+        meta = MetadataFrame(meta_df, pd.Index(["r1", "r2", "r3", "r4"]), "row")
+        result = SplitEngine.split(meta, ["cell_type", "match_type"])
+        # B-cell groups together, T-cell groups together, each sub-sorted
+        assert list(result.keys()) == [
+            "B-cell|exact", "B-cell|partial", "T-cell|exact", "T-cell|partial",
+        ]
+        assert result["B-cell|exact"] == ["r1"]
+        assert result["T-cell|partial"] == ["r2"]
+        assert result["T-cell|exact"] == ["r3"]
+        assert result["B-cell|partial"] == ["r4"]
 
 
 class TestSplitEngineByAssignments:
