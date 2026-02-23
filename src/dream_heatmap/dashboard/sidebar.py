@@ -229,9 +229,9 @@ class SidebarControls:
             name="Scale method", value=_init_method,
             options=_scale_options, sizing_mode="stretch_width",
         )
-        self.scale_axis_select = pn.widgets.RadioButtonGroup(
-            name="Apply to", value=_init_axis,
-            options=["Rows", "Columns"],
+        self.scale_axis_select = pn.widgets.Select(
+            name="Apply", value=_init_axis,
+            options={"Row-wise": "Rows", "Column-wise": "Columns"},
             visible=(_init_method != "none"),
             sizing_mode="stretch_width",
         )
