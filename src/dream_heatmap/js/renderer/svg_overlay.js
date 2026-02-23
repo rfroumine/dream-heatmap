@@ -387,7 +387,6 @@ class SVGOverlay {
 
       for (const track of tracks) {
         this._renderAnnotationTrack(track, edge, layout, onCategoryClick);
-        this._renderTrackTitle(track, edge, layout);
       }
     }
 

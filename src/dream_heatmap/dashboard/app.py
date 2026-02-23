@@ -98,6 +98,30 @@ _DASHBOARD_CSS = """
   text-transform: none !important;
 }
 
+/* ---- Flat icon buttons (light) ---- */
+.bk-btn-light {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  color: #94a3b8 !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+}
+.bk-btn-light:hover:not(:disabled) {
+  background: #e2e8f0 !important;
+  color: #475569 !important;
+}
+.bk-btn-light:disabled {
+  opacity: 0.25 !important;
+  cursor: default !important;
+}
+
 /* ---- Labels ---- */
 label, .bk-input-group label {
   font-size: 12px !important;

@@ -363,7 +363,7 @@ class SidebarControls:
             sizing_mode="stretch_width",
         )
         self.ann_style_select = pn.widgets.Select(
-            name="Style", options=ANNOTATION_STYLES,
+            name="Type", options=ANNOTATION_STYLES,
             value=ANNOTATION_STYLES[0],
             sizing_mode="stretch_width",
         )
@@ -373,7 +373,7 @@ class SidebarControls:
             sizing_mode="stretch_width",
         )
         self.ann_add_button = pn.widgets.Button(
-            name="+ Add", button_type="primary",
+            name="Add annotation", button_type="primary",
             sizing_mode="stretch_width",
         )
 
@@ -944,26 +944,72 @@ class SidebarControls:
             if cfg.get("split") and cfg["edge"] in target
         )
 
+    def _on_move_annotation(self, index: int, direction: int) -> None:
+        """Move annotation at index by direction (-1=up, +1=down)."""
+        anns = list(self.state.annotations)
+        new_index = index + direction
+        if 0 <= new_index < len(anns):
+            anns[index], anns[new_index] = anns[new_index], anns[index]
+            self.state.annotations = anns
+            self._refresh_annotation_list()
+            self._refresh_splits_list()
+
     def _refresh_annotation_list(self) -> None:
         """Rebuild the annotation list display (Step 3 — no split toggles here)."""
+        import html as _html
+
+        anns = self.state.annotations
+        if not anns:
+            self._annotation_list_col.objects = [
+                pn.pane.Str(
+                    "No annotations added yet.",
+                    styles={"color": "#94a3b8", "font-size": "11px", "font-style": "italic"},
+                    margin=(4, 0),
+                ),
+            ]
+            return
+
         items = []
-        for i, cfg in enumerate(self.state.annotations):
+        n = len(anns)
+        for i, cfg in enumerate(anns):
             style_label = "Color track" if cfg["type"] == "categorical" else "Bar chart"
             edge = cfg["edge"]
             edge_label = {"left": "Rows, before", "right": "Rows, after",
                           "top": "Columns, before", "bottom": "Columns, after"}.get(edge, edge)
-            label = f"{cfg['column']} \u2014 {style_label} ({edge_label})"
+            subtitle = f"{style_label} \u00b7 {edge_label}"
+            esc_col = _html.escape(cfg["column"])
 
-            remove_btn = pn.widgets.Button(
-                name="\u00d7", width=30, button_type="danger",
-                margin=(0, 0, 0, 5),
+            label_html = pn.pane.HTML(
+                f'<div style="font-size:12px;font-weight:500;color:#1e293b;overflow:hidden;'
+                f'text-overflow:ellipsis;white-space:nowrap">{esc_col}</div>'
+                f'<div style="font-size:10px;color:#94a3b8">{subtitle}</div>',
+                sizing_mode="stretch_width", margin=0,
             )
+
+            up_btn = pn.widgets.Button(
+                name="\u25b2", width=24, height=24, button_type="light",
+                disabled=(i == 0), margin=(0, 0, 0, 0),
+            )
+            down_btn = pn.widgets.Button(
+                name="\u25bc", width=24, height=24, button_type="light",
+                disabled=(i == n - 1), margin=(0, 0, 0, 0),
+            )
+            remove_btn = pn.widgets.Button(
+                name="\u00d7", width=24, height=24, button_type="light",
+                margin=(0, 0, 0, 0),
+            )
+
             idx = i
+            up_btn.on_click(lambda e, idx=idx: self._on_move_annotation(idx, -1))
+            down_btn.on_click(lambda e, idx=idx: self._on_move_annotation(idx, +1))
             remove_btn.on_click(lambda e, idx=idx: self._on_remove_annotation(idx))
+
             row = pn.Row(
-                pn.pane.Str(label, sizing_mode="stretch_width"),
-                remove_btn,
+                label_html,
+                up_btn, down_btn, remove_btn,
                 sizing_mode="stretch_width",
+                styles={"background": "#f8fafc", "border-radius": "6px", "padding": "4px 6px"},
+                margin=(2, 0),
             )
             items.append(row)
         self._annotation_list_col.objects = items
