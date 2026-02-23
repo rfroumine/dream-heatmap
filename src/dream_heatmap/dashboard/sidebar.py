@@ -242,24 +242,26 @@ class SidebarControls:
 
         # --- Labels section ---
         self.row_labels_select = pn.widgets.Select(
-            name="Row labels", value=s.row_labels,
+            name="Rows", value=s.row_labels,
             options={"All": "all", "Auto": "auto", "None": "none"},
             sizing_mode="stretch_width",
         )
         self.col_labels_select = pn.widgets.Select(
-            name="Col labels", value=s.col_labels,
+            name="Columns", value=s.col_labels,
             options={"All": "all", "Auto": "auto", "None": "none"},
             sizing_mode="stretch_width",
         )
         self.row_label_side_select = pn.widgets.Select(
-            name="Row label side", value=s.row_label_side,
+            name="Side", value=s.row_label_side,
             options={"Left": "left", "Right": "right"},
             sizing_mode="stretch_width",
+            visible=(s.row_labels != "none"),
         )
         self.col_label_side_select = pn.widgets.Select(
-            name="Col label side", value=s.col_label_side,
+            name="Side", value=s.col_label_side,
             options={"Top": "top", "Bottom": "bottom"},
             sizing_mode="stretch_width",
+            visible=(s.col_labels != "none"),
         )
 
         # ── Step 1+2: Grouping & Clustering (per-axis, in tabs) ──
@@ -457,6 +459,12 @@ class SidebarControls:
         )
         self.col_label_side_select.param.watch(
             lambda e: self._set_state("col_label_side", e.new), "value",
+        )
+        self.row_labels_select.param.watch(
+            lambda e: setattr(self.row_label_side_select, "visible", e.new != "none"), "value",
+        )
+        self.col_labels_select.param.watch(
+            lambda e: setattr(self.col_label_side_select, "visible", e.new != "none"), "value",
         )
 
         # Row grouping
@@ -720,7 +728,7 @@ class SidebarControls:
         }
 
         new_anns = []
-        for col in group_by:
+        for col in reversed(group_by):
             if col not in existing_cols:
                 new_anns.append({
                     "type": "categorical",
@@ -1052,11 +1060,10 @@ class SidebarControls:
 
         # --- Tabbed Rows/Columns section (Steps 1+2) ---
         rows_tab_content = pn.Column(
-            _step_label(1, "Group by"),
+            _step_label(1, "Group and order"),
             self.row_group_primary,
             self.row_group_secondary,
-            pn.layout.Divider(),
-            _step_label(2, "Clustering"),
+            _step_label(2, "Cluster"),
             self.row_cluster_mode,
             self.row_cluster_method_select,
             self.row_cluster_metric_select,
@@ -1065,11 +1072,10 @@ class SidebarControls:
         )
 
         cols_tab_content = pn.Column(
-            _step_label(1, "Group by"),
+            _step_label(1, "Group and order"),
             self.col_group_primary,
             self.col_group_secondary,
-            pn.layout.Divider(),
-            _step_label(2, "Clustering"),
+            _step_label(2, "Cluster"),
             self.col_cluster_mode,
             self.col_cluster_method_select,
             self.col_cluster_metric_select,
@@ -1097,14 +1103,12 @@ class SidebarControls:
             ), "color", collapsed=False),
 
             _make_section_card("Labels", pn.Column(
-                self.row_labels_select,
-                self.row_label_side_select,
-                self.col_labels_select,
-                self.col_label_side_select,
+                pn.Row(self.row_labels_select, self.row_label_side_select, sizing_mode="stretch_width"),
+                pn.Row(self.col_labels_select, self.col_label_side_select, sizing_mode="stretch_width"),
                 sizing_mode="stretch_width",
             ), "labels"),
 
-            _make_section_card("Grouping & Clustering", pn.Column(
+            _make_section_card("Group, Order & Cluster", pn.Column(
                 grouping_tabs,
                 sizing_mode="stretch_width",
             ), "ordering", collapsed=False),
