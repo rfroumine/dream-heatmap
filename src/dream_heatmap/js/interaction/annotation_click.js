@@ -68,58 +68,70 @@ class AnnotationClickHandler {
     const memberIds = matchedIndices.map(i => resolver.visualOrder[i]);
     const allOtherIds = otherResolver.visualRangeToIds(0, otherResolver.size);
 
-    // Set selection
+    // Set selection (include category label)
     if (isRow) {
-      this._modelSync.setSelection({ row_ids: memberIds, col_ids: allOtherIds });
+      this._modelSync.setSelection({ row_ids: memberIds, col_ids: allOtherIds, label: categoryName });
     } else {
-      this._modelSync.setSelection({ row_ids: allOtherIds, col_ids: memberIds });
+      this._modelSync.setSelection({ row_ids: allOtherIds, col_ids: memberIds, label: categoryName });
     }
 
-    // Highlight: find bounding visual range of matched indices
-    this._highlightMembers(new Set(memberIds), resolver, axis);
+    // Highlight: draw one rect per contiguous run of matched indices
+    this._highlightRuns(matchedIndices, resolver, axis, memberIds, allOtherIds);
   }
 
   /**
-   * Highlight selected members by showing a selection rectangle
-   * spanning the selected rows or columns.
+   * Find contiguous runs in a sorted array of indices.
+   * e.g. [2,3,4, 9,10, 15] → [{start:2, end:4}, {start:9, end:10}, {start:15, end:15}]
+   * @returns {Array<{start: number, end: number}>} inclusive ranges
    */
-  _highlightMembers(memberSet, resolver, axis) {
-    if (!this._layout) return;
-
-    let minIdx = Infinity;
-    let maxIdx = -Infinity;
-    for (let i = 0; i < resolver.size; i++) {
-      if (memberSet.has(resolver.visualOrder[i])) {
-        minIdx = Math.min(minIdx, i);
-        maxIdx = Math.max(maxIdx, i);
+  _findRuns(sortedIndices) {
+    const runs = [];
+    let runStart = sortedIndices[0];
+    let runEnd = sortedIndices[0];
+    for (let i = 1; i < sortedIndices.length; i++) {
+      if (sortedIndices[i] === runEnd + 1) {
+        runEnd = sortedIndices[i];
+      } else {
+        runs.push({ start: runStart, end: runEnd });
+        runStart = sortedIndices[i];
+        runEnd = sortedIndices[i];
       }
     }
-    if (minIdx === Infinity) return;
+    runs.push({ start: runStart, end: runEnd });
+    return runs;
+  }
 
+  /**
+   * Highlight selected members by showing one selection rectangle
+   * per contiguous run of matched visual indices.
+   */
+  _highlightRuns(matchedIndices, resolver, axis, memberIds, allOtherIds) {
+    if (!this._layout) return;
+
+    const runs = this._findRuns(matchedIndices);
     const heatmap = this._layout.heatmap;
-    if (axis === "row") {
-      const yStart = resolver.cellPositions[minIdx];
-      const yEnd = resolver.cellPositions[maxIdx] + resolver.cellSize;
-      this._svgOverlay.showSelection(
-        heatmap.x, yStart, heatmap.width, yEnd - yStart
-      );
-      if (this._zoomHandler) {
-        this._zoomHandler.setLastSelectionBounds({
-          rowStart: minIdx, rowEnd: maxIdx + 1,
-          colStart: 0, colEnd: this._colResolver.size,
-        });
+    const rects = [];
+
+    for (const run of runs) {
+      if (axis === "row") {
+        const yStart = resolver.cellPositions[run.start];
+        const yEnd = resolver.cellPositions[run.end] + resolver.cellSize;
+        rects.push({ x: heatmap.x, y: yStart, width: heatmap.width, height: yEnd - yStart });
+      } else {
+        const xStart = resolver.cellPositions[run.start];
+        const xEnd = resolver.cellPositions[run.end] + resolver.cellSize;
+        rects.push({ x: xStart, y: heatmap.y, width: xEnd - xStart, height: heatmap.height });
       }
-    } else {
-      const xStart = resolver.cellPositions[minIdx];
-      const xEnd = resolver.cellPositions[maxIdx] + resolver.cellSize;
-      this._svgOverlay.showSelection(
-        xStart, heatmap.y, xEnd - xStart, heatmap.height
-      );
-      if (this._zoomHandler) {
-        this._zoomHandler.setLastSelectionBounds({
-          rowStart: 0, rowEnd: this._rowResolver.size,
-          colStart: minIdx, colEnd: maxIdx + 1,
-        });
+    }
+
+    this._svgOverlay.showSelectionRects(rects);
+
+    // Store IDs for ID-based zoom (not range-based)
+    if (this._zoomHandler) {
+      if (axis === "row") {
+        this._zoomHandler.setLastSelectionIds({ row_ids: memberIds, col_ids: allOtherIds });
+      } else {
+        this._zoomHandler.setLastSelectionIds({ row_ids: allOtherIds, col_ids: memberIds });
       }
     }
   }

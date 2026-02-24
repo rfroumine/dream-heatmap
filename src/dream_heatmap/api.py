@@ -525,6 +525,13 @@ class Heatmap:
             zoomed_row = self._row_mapper
             zoomed_col = self._col_mapper
             zoomed_matrix = self._matrix
+        elif "row_ids" in zoom_range:
+            # ID-based zoom (annotation click): filter to specific IDs
+            zoomed_row = self._row_mapper.apply_zoom_by_ids(zoom_range["row_ids"])
+            zoomed_col = self._col_mapper.apply_zoom_by_ids(zoom_range["col_ids"])
+            zoomed_matrix = self._matrix.slice(
+                zoomed_row.visual_order, zoomed_col.visual_order,
+            )
         else:
             zoomed_row = self._row_mapper.apply_zoom(
                 zoom_range["row_start"], zoom_range["row_end"]
@@ -537,7 +544,7 @@ class Heatmap:
             )
 
         # Remap gap sizes for zoomed coordinate space
-        if zoom_range is not None:
+        if zoom_range is not None and "row_ids" not in zoom_range:
             zoomed_row_gap_sizes = Heatmap._remap_gap_sizes(
                 self._row_gap_sizes,
                 zoom_range["row_start"], zoom_range["row_end"],
@@ -546,6 +553,10 @@ class Heatmap:
                 self._col_gap_sizes,
                 zoom_range["col_start"], zoom_range["col_end"],
             )
+        elif zoom_range is not None:
+            # ID-based zoom: no gap remapping needed
+            zoomed_row_gap_sizes = None
+            zoomed_col_gap_sizes = None
         else:
             zoomed_row_gap_sizes = self._row_gap_sizes
             zoomed_col_gap_sizes = self._col_gap_sizes

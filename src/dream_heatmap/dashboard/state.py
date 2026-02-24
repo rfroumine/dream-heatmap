@@ -66,6 +66,7 @@ class DashboardState(param.Parameterized):
     # --- Selection (set by JS selection bridge) ---
     selected_row_ids = param.List(default=[])
     selected_col_ids = param.List(default=[])
+    selection_label = param.String(default="Selected")
 
     # --- Chart configs (list of dicts) ---
     chart_configs = param.List(default=[])
@@ -402,6 +403,7 @@ class DashboardState(param.Parameterized):
         """Parse selection JSON from JS and update selected IDs."""
         try:
             data = json.loads(selection_json)
+            self.selection_label = data.get("label", "Selected")
             self.selected_row_ids = data.get("row_ids", [])
             self.selected_col_ids = data.get("col_ids", [])
         except (json.JSONDecodeError, TypeError):
@@ -424,6 +426,13 @@ class DashboardState(param.Parameterized):
                 zoomed_row = hm._row_mapper
                 zoomed_col = hm._col_mapper
                 zoomed_matrix = hm._matrix
+            elif "row_ids" in zoom_range:
+                # ID-based zoom (annotation click): filter to specific IDs
+                zoomed_row = hm._row_mapper.apply_zoom_by_ids(zoom_range["row_ids"])
+                zoomed_col = hm._col_mapper.apply_zoom_by_ids(zoom_range["col_ids"])
+                zoomed_matrix = hm._matrix.slice(
+                    zoomed_row.visual_order, zoomed_col.visual_order,
+                )
             else:
                 zoomed_row = hm._row_mapper.apply_zoom(
                     zoom_range["row_start"], zoom_range["row_end"]
@@ -436,7 +445,7 @@ class DashboardState(param.Parameterized):
                 )
 
             # Remap gap sizes for zoomed coordinate space
-            if zoom_range is not None:
+            if zoom_range is not None and "row_ids" not in zoom_range:
                 zoomed_row_gap_sizes = Heatmap._remap_gap_sizes(
                     hm._row_gap_sizes,
                     zoom_range["row_start"], zoom_range["row_end"],
@@ -445,6 +454,10 @@ class DashboardState(param.Parameterized):
                     hm._col_gap_sizes,
                     zoom_range["col_start"], zoom_range["col_end"],
                 )
+            elif zoom_range is not None:
+                # ID-based zoom: no gap remapping needed
+                zoomed_row_gap_sizes = None
+                zoomed_col_gap_sizes = None
             else:
                 zoomed_row_gap_sizes = hm._row_gap_sizes
                 zoomed_col_gap_sizes = hm._col_gap_sizes

@@ -53,6 +53,7 @@ def build_box(
     selected_ids: list | None = None,
     name: str = "",
     compact: bool = False,
+    selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a box plot with All vs Selected traces."""
     fig = go.Figure()
@@ -68,7 +69,7 @@ def build_box(
         sel_values = values[sel_mask]
         if len(sel_values) > 0:
             fig.add_trace(go.Box(
-                y=sel_values.values, name="Selected",
+                y=sel_values.values, name=selected_label,
                 marker_color=COLOR_SELECTED, line_color=COLOR_SELECTED_LINE,
                 boxmean="sd",
             ))
@@ -82,6 +83,7 @@ def build_violin(
     selected_ids: list | None = None,
     name: str = "",
     compact: bool = False,
+    selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a violin plot with All vs Selected traces."""
     fig = go.Figure()
@@ -97,7 +99,7 @@ def build_violin(
         sel_values = values[sel_mask]
         if len(sel_values) > 0:
             fig.add_trace(go.Violin(
-                y=sel_values.values, name="Selected",
+                y=sel_values.values, name=selected_label,
                 fillcolor=COLOR_SELECTED, line_color=COLOR_SELECTED_LINE,
                 meanline_visible=True,
             ))
@@ -111,6 +113,7 @@ def build_bar(
     selected_ids: list | None = None,
     name: str = "",
     compact: bool = False,
+    selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a bar chart showing value counts (categorical data)."""
     fig = go.Figure()
@@ -133,7 +136,7 @@ def build_bar(
             fig.add_trace(go.Bar(
                 x=sel_counts.index.astype(str).tolist(),
                 y=sel_counts.values,
-                name="Selected",
+                name=selected_label,
                 marker_color=COLOR_SELECTED,
                 marker_line_color=COLOR_SELECTED_LINE,
                 marker_line_width=1,
@@ -152,6 +155,7 @@ def build_scatter(
     x_name: str = "",
     y_name: str = "",
     compact: bool = False,
+    selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a scatter plot with All vs Selected points."""
     fig = go.Figure()
@@ -167,7 +171,7 @@ def build_scatter(
         if sel_mask.any():
             fig.add_trace(go.Scattergl(
                 x=x_values[sel_mask].values, y=y_values[sel_mask].values,
-                mode="markers", name="Selected",
+                mode="markers", name=selected_label,
                 marker=dict(color=COLOR_SELECTED, size=5,
                             line=dict(width=0.5, color=COLOR_SELECTED_LINE)),
             ))
@@ -185,6 +189,7 @@ def build_histogram(
     selected_ids: list | None = None,
     name: str = "",
     compact: bool = False,
+    selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a histogram with All vs Selected traces."""
     fig = go.Figure()
@@ -202,7 +207,7 @@ def build_histogram(
         sel_values = values[sel_mask]
         if len(sel_values) > 0:
             fig.add_trace(go.Histogram(
-                x=sel_values.values, name="Selected",
+                x=sel_values.values, name=selected_label,
                 marker_color=COLOR_SELECTED,
                 marker_line_color=COLOR_SELECTED_LINE,
                 marker_line_width=1,

@@ -212,25 +212,54 @@ class SVGOverlay {
   // --- Selection rectangle ---
 
   showSelection(x, y, width, height) {
-    if (!this.selectionRect) {
-      this.selectionRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      this.selectionRect.setAttribute("fill", "rgba(13,148,136,0.08)");
-      this.selectionRect.setAttribute("stroke", "rgba(13,148,136,0.6)");
-      this.selectionRect.setAttribute("stroke-width", "1.5");
-      this.selectionRect.setAttribute("stroke-dasharray", "5,4");
-      this.selectionRect.style.pointerEvents = "none";
-      this.svg.appendChild(this.selectionRect);
+    this.showSelectionRects([{ x, y, width, height }]);
+  }
+
+  /**
+   * Show multiple disjoint selection rectangles (one per contiguous run).
+   * @param {Array<{x: number, y: number, width: number, height: number}>} rects
+   */
+  showSelectionRects(rects) {
+    // Clear previous multi-rect group
+    this._clearSelectionGroup();
+
+    if (!this._selectionGroup) {
+      this._selectionGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      this._selectionGroup.style.pointerEvents = "none";
+      this.svg.appendChild(this._selectionGroup);
     }
-    this.selectionRect.setAttribute("x", x);
-    this.selectionRect.setAttribute("y", y);
-    this.selectionRect.setAttribute("width", Math.max(0, width));
-    this.selectionRect.setAttribute("height", Math.max(0, height));
-    this.selectionRect.style.display = "";
+    this._selectionGroup.style.display = "";
+
+    for (const { x, y, width, height } of rects) {
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", Math.max(0, width));
+      rect.setAttribute("height", Math.max(0, height));
+      rect.setAttribute("fill", "rgba(13,148,136,0.08)");
+      rect.setAttribute("stroke", "rgba(13,148,136,0.6)");
+      rect.setAttribute("stroke-width", "1.5");
+      rect.setAttribute("stroke-dasharray", "5,4");
+      this._selectionGroup.appendChild(rect);
+    }
+
+    // Keep legacy selectionRect hidden when using multi-rect
+    if (this.selectionRect) this.selectionRect.style.display = "none";
   }
 
   hideSelection() {
     if (this.selectionRect) {
       this.selectionRect.style.display = "none";
+    }
+    this._clearSelectionGroup();
+  }
+
+  _clearSelectionGroup() {
+    if (this._selectionGroup) {
+      while (this._selectionGroup.firstChild) {
+        this._selectionGroup.removeChild(this._selectionGroup.firstChild);
+      }
+      this._selectionGroup.style.display = "none";
     }
   }
 

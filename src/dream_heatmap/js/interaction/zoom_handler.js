@@ -24,8 +24,10 @@ class ZoomHandler {
     this._rowResolver = null;
     this._colResolver = null;
 
-    // Last selection bounds (set by SelectionHandler)
+    // Last selection bounds (set by SelectionHandler) — range-based
     this._lastSelectionBounds = null;
+    // Last selection IDs (set by AnnotationClickHandler) — ID-based
+    this._lastSelectionIds = null;
 
     this._bindEvents();
   }
@@ -40,12 +42,22 @@ class ZoomHandler {
   }
 
   /**
-   * Store the last selection's visual index bounds for zoom.
+   * Store the last selection's visual index bounds for zoom (range-based).
    * Called by SelectionHandler after a successful selection.
    * @param {{rowStart: number, rowEnd: number, colStart: number, colEnd: number}} bounds
    */
   setLastSelectionBounds(bounds) {
     this._lastSelectionBounds = bounds;
+    this._lastSelectionIds = null;  // clear ID-based
+  }
+
+  /**
+   * Store the last selection's IDs for zoom (ID-based, for annotation clicks).
+   * @param {{row_ids: Array, col_ids: Array}} ids
+   */
+  setLastSelectionIds(ids) {
+    this._lastSelectionIds = ids;
+    this._lastSelectionBounds = null;  // clear range-based
   }
 
   _bindEvents() {
@@ -61,7 +73,7 @@ class ZoomHandler {
     document.addEventListener("keydown", (e) => {
       if (e.key === "z" && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (!this._svg.isConnected) return;
-        if (this._lastSelectionBounds) {
+        if (this._lastSelectionBounds || this._lastSelectionIds) {
           this._zoomToSelection();
         } else {
           this._showFeedback("Select a region first, then press Z to zoom");
@@ -76,13 +88,22 @@ class ZoomHandler {
   resetZoom() { this._resetZoom(); }
 
   _zoomToSelection() {
+    // Hide selection overlay immediately (don't wait for Python round-trip)
+    this._svgOverlay.hideSelection();
+
+    if (this._lastSelectionIds) {
+      // ID-based zoom (annotation click): send IDs to Python
+      const { row_ids, col_ids } = this._lastSelectionIds;
+      this._viewport.setZoomed();
+      this._modelSync.setZoomRange({ row_ids, col_ids });
+      this._lastSelectionIds = null;
+      return;
+    }
+
     if (!this._lastSelectionBounds) return;
 
     const { rowStart, rowEnd, colStart, colEnd } = this._lastSelectionBounds;
     if (rowStart >= rowEnd || colStart >= colEnd) return;
-
-    // Hide selection overlay immediately (don't wait for Python round-trip)
-    this._svgOverlay.hideSelection();
 
     this._viewport.setRange(rowStart, rowEnd, colStart, colEnd);
 
@@ -99,6 +120,7 @@ class ZoomHandler {
     this._svgOverlay.hideSelection();
     this._viewport.reset();
     this._lastSelectionBounds = null;
+    this._lastSelectionIds = null;
     this._modelSync.setZoomRange(null);
   }
 

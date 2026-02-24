@@ -197,6 +197,25 @@ class IDMapper:
             groups=self.groups,  # keep original group info
         )
 
+    def apply_zoom_by_ids(self, ids: list) -> IDMapper:
+        """Return a new IDMapper containing only the specified IDs.
+
+        Preserves their current visual order. No gap positions in the
+        filtered view (IDs are packed together).
+        """
+        id_set = set(ids)
+        filtered = np.array(
+            [x for x in self.visual_order.tolist() if x in id_set],
+            dtype=object,
+        )
+        if len(filtered) == 0:
+            raise ValueError("No matching IDs found in visual order.")
+        return IDMapper(
+            visual_order=filtered,
+            gap_positions=frozenset(),
+            groups=self.groups,  # keep original group info
+        )
+
     def to_dict(self) -> dict:
         """Serialize for JSON transfer to JS."""
         return {

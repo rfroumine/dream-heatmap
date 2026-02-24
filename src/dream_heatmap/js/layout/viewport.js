@@ -42,6 +42,11 @@ class Viewport {
     this._isZoomed = true;
   }
 
+  /** Mark as zoomed without tracking a range (for ID-based zooms). */
+  setZoomed() {
+    this._isZoomed = true;
+  }
+
   /** Reset to full view. */
   reset() {
     this._rowStart = 0;

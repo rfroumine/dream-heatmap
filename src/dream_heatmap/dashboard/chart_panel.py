@@ -132,19 +132,20 @@ class ChartPanelManager:
         chart_type = cfg["type"]
         column = cfg["column"]
         selected_ids = self.state.selected_col_ids or None
+        selected_label = self.state.selection_label
 
         values = self._get_values(column)
         if values is None:
             return None
 
         if chart_type == "box":
-            return plotly_charts.build_box(values, selected_ids, name=column)
+            return plotly_charts.build_box(values, selected_ids, name=column, selected_label=selected_label)
         elif chart_type == "violin":
-            return plotly_charts.build_violin(values, selected_ids, name=column)
+            return plotly_charts.build_violin(values, selected_ids, name=column, selected_label=selected_label)
         elif chart_type == "bar":
-            return plotly_charts.build_bar(values, selected_ids, name=column)
+            return plotly_charts.build_bar(values, selected_ids, name=column, selected_label=selected_label)
         elif chart_type == "histogram":
-            return plotly_charts.build_histogram(values, selected_ids, name=column)
+            return plotly_charts.build_histogram(values, selected_ids, name=column, selected_label=selected_label)
         elif chart_type == "scatter":
             y_column = cfg.get("y_column", column)
             y_values = self._get_values(y_column)
@@ -153,6 +154,7 @@ class ChartPanelManager:
             return plotly_charts.build_scatter(
                 values, y_values, selected_ids,
                 x_name=column, y_name=y_column,
+                selected_label=selected_label,
             )
         return None
 
