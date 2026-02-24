@@ -8,6 +8,7 @@ import pandas as pd
 
 from .state import DashboardState
 from . import plotly_charts
+from ..display_utils import prettify_name
 
 
 CHART_TYPES = ["box", "violin", "bar", "scatter", "histogram"]
@@ -53,11 +54,13 @@ class ChartPanelManager:
         self.chart_add_button.on_click(self._on_add_chart)
         self.chart_type_select.param.watch(self._on_type_change, "value")
 
-    def _get_chart_columns(self) -> list[str]:
-        """Get available columns for chart data."""
-        cols = []
-        cols.extend(self.state.get_expression_row_names())
-        cols.extend(self.state.get_col_metadata_columns())
+    def _get_chart_columns(self) -> dict[str, str]:
+        """Get available columns for chart data as {display: raw}."""
+        cols: dict[str, str] = {}
+        for c in self.state.get_expression_row_names():
+            cols[prettify_name(c)] = c
+        for c in self.state.get_col_metadata_columns():
+            cols[prettify_name(c)] = c
         return cols
 
     def _on_type_change(self, event) -> None:
@@ -118,7 +121,7 @@ class ChartPanelManager:
             card = pn.Card(
                 plotly_pane,
                 pn.Row(remove_btn, align="end"),
-                title=f"{cfg['type'].title()}: {cfg['column']}",
+                title=f"{cfg['type'].title()}: {prettify_name(cfg['column'])}",
                 sizing_mode="stretch_width",
                 collapsed=False,
             )

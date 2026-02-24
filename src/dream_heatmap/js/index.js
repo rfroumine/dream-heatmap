@@ -123,10 +123,11 @@ function render({ model, el }) {
     // Render color bar + categorical legends (unified in legend panel)
     const legends = config.legends || null;
     const colorBarTitle = config.colorBarTitle || null;
+    const colorBarSubtitle = config.colorBarSubtitle || null;
     if (layout.legendPanel || layout.hasColorBar) {
       legendRenderer.render(
         legends, layout.legendPanel,
-        colorBarRenderer, lut, config.vmin, config.vmax, colorBarTitle
+        colorBarRenderer, lut, config.vmin, config.vmax, colorBarTitle, colorBarSubtitle
       );
     } else {
       legendRenderer.clear();
@@ -136,6 +137,10 @@ function render({ model, el }) {
     // Render axis labels
     const labels = config.labels || null;
     svgOverlay.renderLabels(labels, layout);
+
+    // Render title
+    const titleText = config.title || null;
+    svgOverlay.renderTitle(titleText, layout);
 
     // Update handler contexts
     hoverHandler.setContext(layout, matrix, rowResolver, colResolver, colorMapper);

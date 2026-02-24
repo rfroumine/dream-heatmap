@@ -46,6 +46,13 @@ class PanelModelSync {
     return typeof raw === "string" ? JSON.parse(raw) : raw;
   }
 
+  /** @returns {ArrayBuffer} decoded original (unscaled) matrix bytes from base64 */
+  getOriginalMatrixBytes() {
+    const b64 = this._model.original_matrix_b64;
+    if (!b64) return null;
+    return b64ToArrayBuffer(b64);
+  }
+
   /** @returns {object} parsed config */
   getConfig() {
     const raw = this._model.config_json;
@@ -86,7 +93,7 @@ class PanelModelSync {
         });
       }
     };
-    for (const prop of ["matrix_b64", "color_lut_b64", "layout_json", "id_mappers_json", "config_json"]) {
+    for (const prop of ["matrix_b64", "color_lut_b64", "layout_json", "id_mappers_json", "config_json", "original_matrix_b64"]) {
       this._model.on(prop, debounced);
     }
   }

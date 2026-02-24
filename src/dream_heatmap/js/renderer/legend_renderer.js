@@ -19,7 +19,7 @@ class LegendRenderer {
    * @param {number} vmax
    * @param {string|null} colorBarTitle
    */
-  render(legends, legendPanel, colorBarRenderer, lut, vmin, vmax, colorBarTitle) {
+  render(legends, legendPanel, colorBarRenderer, lut, vmin, vmax, colorBarTitle, colorBarSubtitle) {
     this.clear();
     if (colorBarRenderer) colorBarRenderer.clear();
     if (!legendPanel) return;
@@ -34,6 +34,12 @@ class LegendRenderer {
     var rowHeight = 16;
     var titleHeight = 18;
     var blockGap = 20;
+    var columnGap = 12;
+    var charWidth = 6.5;
+    var SINGLE_COL_MAX = 8;
+    var MAX_COLUMNS = 3;
+    var MULTI_COL_MAX = 24;
+    var MAX_VISIBLE = MAX_COLUMNS * 6;  // 18
     var fontFamily = '"Outfit", system-ui, -apple-system, sans-serif';
 
     var panelX = legendPanel.x;
@@ -42,7 +48,7 @@ class LegendRenderer {
     // --- Color bar block (always first, on top) ---
     if (colorBarRenderer && lut) {
       var cbResult = colorBarRenderer.renderInline(
-        panelX, curY, lut, vmin, vmax, colorBarTitle || null, this._group
+        panelX, curY, lut, vmin, vmax, colorBarTitle || null, this._group, colorBarSubtitle || null
       );
       curY += cbResult.height + blockGap;
     }
@@ -64,36 +70,88 @@ class LegendRenderer {
         title.setAttribute("fill", "#334155");
         this._group.appendChild(title);
 
-        var entryY = curY + titleHeight;
-
-        // Render entries
-        for (var ei = 0; ei < entries.length; ei++) {
-          var entry = entries[ei];
-
-          // Color swatch
-          var rect = document.createElementNS(ns, "rect");
-          rect.setAttribute("x", panelX);
-          rect.setAttribute("y", entryY);
-          rect.setAttribute("width", swatchSize);
-          rect.setAttribute("height", swatchSize);
-          rect.setAttribute("fill", entry.color);
-          rect.setAttribute("rx", "2");
-          this._group.appendChild(rect);
-
-          // Label
-          var label = document.createElementNS(ns, "text");
-          label.textContent = entry.label;
-          label.setAttribute("x", panelX + swatchSize + swatchLabelGap);
-          label.setAttribute("y", entryY + swatchSize * 0.8);
-          label.setAttribute("font-size", "10");
-          label.setAttribute("font-family", fontFamily);
-          label.setAttribute("fill", "#475569");
-          this._group.appendChild(label);
-
-          entryY += rowHeight;
+        // Compute column layout
+        var n = entries.length;
+        var numCols, rowsPerCol, visibleEntries, overflowCount;
+        if (n <= SINGLE_COL_MAX) {
+          numCols = 1;
+          rowsPerCol = n;
+          visibleEntries = entries;
+          overflowCount = 0;
+        } else if (n <= MULTI_COL_MAX) {
+          numCols = Math.min(MAX_COLUMNS, Math.ceil(n / 8));
+          rowsPerCol = Math.ceil(n / numCols);
+          visibleEntries = entries;
+          overflowCount = 0;
+        } else {
+          numCols = MAX_COLUMNS;
+          rowsPerCol = 6;
+          visibleEntries = entries.slice(0, MAX_VISIBLE);
+          overflowCount = n - MAX_VISIBLE;
         }
 
-        var blockH = titleHeight + entries.length * rowHeight;
+        // Compute per-column widths
+        var colWidths = [];
+        for (var c = 0; c < numCols; c++) {
+          var maxLabelW = 0;
+          var start = c * rowsPerCol;
+          var end = Math.min(start + rowsPerCol, visibleEntries.length);
+          for (var k = start; k < end; k++) {
+            var lw = visibleEntries[k].label.length * charWidth;
+            if (lw > maxLabelW) maxLabelW = lw;
+          }
+          colWidths.push(swatchSize + swatchLabelGap + maxLabelW);
+        }
+
+        // Render entries in columns
+        var colX = panelX;
+        for (var c = 0; c < numCols; c++) {
+          var entryY = curY + titleHeight;
+          var start = c * rowsPerCol;
+          var end = Math.min(start + rowsPerCol, visibleEntries.length);
+          for (var ei = start; ei < end; ei++) {
+            var entry = visibleEntries[ei];
+
+            // Color swatch
+            var rect = document.createElementNS(ns, "rect");
+            rect.setAttribute("x", colX);
+            rect.setAttribute("y", entryY);
+            rect.setAttribute("width", swatchSize);
+            rect.setAttribute("height", swatchSize);
+            rect.setAttribute("fill", entry.color);
+            rect.setAttribute("rx", "2");
+            this._group.appendChild(rect);
+
+            // Label
+            var label = document.createElementNS(ns, "text");
+            label.textContent = entry.label;
+            label.setAttribute("x", colX + swatchSize + swatchLabelGap);
+            label.setAttribute("y", entryY + swatchSize * 0.8);
+            label.setAttribute("font-size", "10");
+            label.setAttribute("font-family", fontFamily);
+            label.setAttribute("fill", "#475569");
+            this._group.appendChild(label);
+
+            entryY += rowHeight;
+          }
+          colX += colWidths[c] + columnGap;
+        }
+
+        // "+N more" overflow text
+        var truncated = overflowCount > 0;
+        if (truncated) {
+          var moreText = document.createElementNS(ns, "text");
+          moreText.textContent = "+" + overflowCount + " more";
+          moreText.setAttribute("x", panelX);
+          moreText.setAttribute("y", curY + titleHeight + rowsPerCol * rowHeight + 10);
+          moreText.setAttribute("font-size", "9");
+          moreText.setAttribute("font-style", "italic");
+          moreText.setAttribute("font-family", fontFamily);
+          moreText.setAttribute("fill", "#94a3b8");
+          this._group.appendChild(moreText);
+        }
+
+        var blockH = titleHeight + rowsPerCol * rowHeight + (truncated ? 14 : 0);
         curY += blockH + blockGap;
       }
     }

@@ -88,6 +88,12 @@ class Heatmap:
         # Color bar title
         self._color_bar_title: str | None = None
 
+        # Plot title (rendered as SVG text above the heatmap)
+        self._title: str | None = None
+
+        # Value description (main color bar title; scaling info becomes subtitle)
+        self._value_description: str | None = None
+
         # Per-gap sizing for hierarchical splits (set by dashboard)
         self._row_gap_sizes: dict[int, float] | None = None
         self._col_gap_sizes: dict[int, float] | None = None
@@ -138,6 +144,35 @@ class Heatmap:
             vmax=vmax if vmax is not None else data_vmax,
         )
         self._color_bar_title = color_bar_title
+        return self
+
+    # --- Title ---
+
+    def set_title(self, title: str) -> Heatmap:
+        """Set a title displayed above the heatmap.
+
+        Parameters
+        ----------
+        title : str
+            Title text. Pass empty string to remove.
+        """
+        self._title = title if title else None
+        return self
+
+    # --- Value description ---
+
+    def set_value_description(self, description: str) -> Heatmap:
+        """Set a description for the color bar values.
+
+        This appears as the main color bar title, while any
+        auto-generated scaling label becomes a subtitle below it.
+
+        Parameters
+        ----------
+        description : str
+            Value description (e.g. "Expression (TPM)").
+        """
+        self._value_description = description if description else None
         return self
 
     # --- Splits ---
@@ -444,6 +479,12 @@ class Heatmap:
         label_data = self._build_label_data()
         legend_data = self._build_legend_data()
 
+        # Determine color bar title/subtitle
+        # If user set a value_description, it becomes the main title
+        # and the auto-generated color_bar_title becomes the subtitle.
+        cb_title = self._value_description or self._color_bar_title
+        cb_subtitle = self._color_bar_title if self._value_description else None
+
         self._widget = HeatmapWidget(
             matrix=self._matrix,
             color_scale=self._color_scale,
@@ -455,7 +496,9 @@ class Heatmap:
             annotations=annotation_data,
             labels=label_data,
             legends=legend_data,
-            color_bar_title=self._color_bar_title,
+            color_bar_title=cb_title,
+            color_bar_subtitle=cb_subtitle,
+            title=self._title,
         )
         self._widget.set_zoom_callback(self._handle_zoom)
         return self._widget
@@ -473,6 +516,9 @@ class Heatmap:
         self._compute_layout()
         from .export.html_export import HTMLExporter
 
+        cb_title = self._value_description or self._color_bar_title
+        cb_subtitle = self._color_bar_title if self._value_description else None
+
         HTMLExporter.export(
             path=path,
             matrix=self._matrix,
@@ -485,6 +531,9 @@ class Heatmap:
             annotations=self._build_annotation_data(),
             labels=self._build_label_data(),
             legends=self._build_legend_data(),
+            color_bar_title=cb_title,
+            color_bar_subtitle=cb_subtitle,
+            heatmap_title=self._title,
         )
 
     # --- Selection ---
@@ -589,6 +638,7 @@ class Heatmap:
             bottom_label_height=bottom_lbl_h,
             row_gap_sizes=zoomed_row_gap_sizes,
             col_gap_sizes=zoomed_col_gap_sizes,
+            title_height=28.0 if self._title else 0.0,
         )
 
         # Rebuild annotations and labels for zoomed mappers
@@ -602,6 +652,9 @@ class Heatmap:
         # Dendrograms are not meaningful after zoom — omit them
         zoomed_dendrograms = None if zoom_range is not None else self._build_dendrogram_data()
 
+        cb_title = self._value_description or self._color_bar_title
+        cb_subtitle = self._color_bar_title if self._value_description else None
+
         self._widget.update_data(
             zoomed_matrix,
             self._color_scale,
@@ -612,7 +665,9 @@ class Heatmap:
             annotations=zoomed_annotations,
             labels=zoomed_labels,
             legends=self._build_legend_data(),
-            color_bar_title=self._color_bar_title,
+            color_bar_title=cb_title,
+            color_bar_subtitle=cb_subtitle,
+            title=self._title,
         )
 
     # --- Internal ---
@@ -751,6 +806,7 @@ class Heatmap:
             bottom_label_height=bottom_lbl_h,
             row_gap_sizes=self._row_gap_sizes,
             col_gap_sizes=self._col_gap_sizes,
+            title_height=28.0 if self._title else 0.0,
         )
 
     def _build_dendrogram_data(self) -> dict | None:
@@ -972,16 +1028,27 @@ class Heatmap:
         below. Returns (width, height).
         """
         # Constants matching legend_renderer.js
-        swatch_size = 10.0
-        swatch_label_gap = 6.0
+        swatch_size = 11.0
+        swatch_label_gap = 7.0
         char_width = 6.5  # approximate at 10px font
-        row_height = 14.0
-        title_height = 16.0
-        block_gap = 16.0  # vertical gap between stacked blocks
+        row_height = 16.0
+        title_height = 18.0
+        block_gap = 20.0  # vertical gap between stacked blocks
+        column_gap = 12.0
+        SINGLE_COL_MAX = 8
+        MAX_COLUMNS = 3
+        MULTI_COL_MAX = 24
+        MAX_VISIBLE = MAX_COLUMNS * 6  # 18
 
         # Color bar block dimensions
+        has_cb_title = bool(self._value_description or self._color_bar_title)
+        has_cb_subtitle = bool(self._value_description and self._color_bar_title)
         color_bar_width = 140.0
-        color_bar_height = 42.0 if self._color_bar_title else 26.0
+        color_bar_height = 26.0
+        if has_cb_title:
+            color_bar_height += 16.0
+        if has_cb_subtitle:
+            color_bar_height += 14.0
 
         # Build list of (width, height) blocks
         blocks: list[tuple[float, float]] = []
@@ -990,14 +1057,41 @@ class Heatmap:
         legends = self._build_legend_data()
         if legends:
             for legend in legends:
-                # Block width: max of title and entry widths
+                entries = legend["entries"]
+                n = len(entries)
                 title_w = len(legend["name"]) * char_width
-                max_entry_w = 0.0
-                for entry in legend["entries"]:
-                    entry_w = swatch_size + swatch_label_gap + len(entry["label"]) * char_width
-                    max_entry_w = max(max_entry_w, entry_w)
-                block_w = max(title_w, max_entry_w) + 10.0
-                block_h = title_height + len(legend["entries"]) * row_height
+
+                # Compute column layout
+                if n <= SINGLE_COL_MAX:
+                    num_cols = 1
+                    rows_per_col = n
+                    visible = entries
+                    truncated = False
+                elif n <= MULTI_COL_MAX:
+                    num_cols = min(MAX_COLUMNS, math.ceil(n / 8))
+                    rows_per_col = math.ceil(n / num_cols)
+                    visible = entries
+                    truncated = False
+                else:
+                    num_cols = MAX_COLUMNS
+                    rows_per_col = 6
+                    visible = entries[:MAX_VISIBLE]
+                    truncated = True
+
+                # Per-column widths
+                col_widths = []
+                for c in range(num_cols):
+                    start = c * rows_per_col
+                    end = min(start + rows_per_col, len(visible))
+                    max_label_len = max(
+                        (len(visible[k]["label"]) for k in range(start, end)),
+                        default=0,
+                    )
+                    col_widths.append(swatch_size + swatch_label_gap + max_label_len * char_width)
+
+                entries_w = sum(col_widths) + column_gap * (num_cols - 1)
+                block_w = max(title_w, entries_w) + 10.0
+                block_h = title_height + rows_per_col * row_height + (14.0 if truncated else 0.0)
                 blocks.append((block_w, block_h))
 
         # Vertical stack: width is the widest block, height is all blocks stacked

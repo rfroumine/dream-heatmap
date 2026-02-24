@@ -7,6 +7,7 @@ import panel as pn
 
 from .state import DashboardState
 from .code_export import generate_code
+from ..display_utils import prettify_name
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -139,7 +140,7 @@ def _build_grouping_options(meta_cols: list[str]) -> dict[str, str]:
     """Build options for a grouping dropdown: None + metadata columns."""
     opts = {"None": ""}
     for col in meta_cols:
-        opts[col] = col
+        opts[prettify_name(col)] = col
     return opts
 
 
@@ -150,7 +151,7 @@ def _build_secondary_grouping_options(
     opts = {"None": ""}
     for col in meta_cols:
         if col != exclude:
-            opts[col] = col
+            opts[prettify_name(col)] = col
     return opts
 
 
@@ -185,6 +186,20 @@ class SidebarControls:
 
         row_meta_cols = s.get_row_metadata_columns() if s.row_metadata is not None else []
         col_meta_cols = s.get_col_metadata_columns() if s.col_metadata is not None else []
+
+        # --- Title ---
+        self.title_input = pn.widgets.TextInput(
+            name="Heatmap Title", value=s.title,
+            placeholder="Heatmap title...",
+            sizing_mode="stretch_width",
+        )
+
+        # --- Value description ---
+        self.value_description_input = pn.widgets.TextInput(
+            name="Value Label", value=s.value_description,
+            placeholder="e.g. Expression (TPM)...",
+            sizing_mode="stretch_width",
+        )
 
         # --- Color scale section ---
         self.colormap_select = pn.widgets.Select(
@@ -350,9 +365,10 @@ class SidebarControls:
             sizing_mode="stretch_width",
         )
         ann_col_options = self._get_annotation_columns()
+        ann_col_values = list(ann_col_options.values()) if ann_col_options else []
         self.ann_column_select = pn.widgets.Select(
             name="Column", options=ann_col_options,
-            value=ann_col_options[0] if ann_col_options else "",
+            value=ann_col_values[0] if ann_col_values else "",
             sizing_mode="stretch_width",
         )
         self.ann_style_select = pn.widgets.Select(
@@ -416,6 +432,14 @@ class SidebarControls:
     def _wire_bindings(self) -> None:
         """Link widget values to DashboardState params."""
         s = self.state
+
+        # Title & value description
+        self.title_input.param.watch(
+            lambda e: self._set_state("title", e.new), "value",
+        )
+        self.value_description_input.param.watch(
+            lambda e: self._set_state("value_description", e.new), "value",
+        )
 
         # Color scale
         self.colormap_select.param.watch(
@@ -782,24 +806,26 @@ class SidebarControls:
 
     # --- Annotation helpers ---
 
-    def _get_annotation_columns(self, axis: str | None = None) -> list[str]:
-        """Get available metadata columns for the selected axis."""
+    def _get_annotation_columns(self, axis: str | None = None) -> dict[str, str]:
+        """Get available metadata columns for the selected axis as {display: raw}."""
         if axis is None:
             ann_axis = getattr(self, "ann_axis_select", None)
             if ann_axis is None:
-                return []
+                return {}
             axis = ann_axis.value
 
         s = self.state
         if axis == "Rows":
-            return s.get_row_metadata_columns()
+            cols = s.get_row_metadata_columns()
         else:
-            return s.get_col_metadata_columns()
+            cols = s.get_col_metadata_columns()
+        return {prettify_name(c): c for c in cols}
 
     def _update_annotation_columns(self, axis: str | None = None) -> None:
         """Update the annotation column dropdown when axis changes."""
         new_options = self._get_annotation_columns(axis)
-        new_value = new_options[0] if new_options else ""
+        new_values = list(new_options.values()) if new_options else []
+        new_value = new_values[0] if new_values else ""
         self.ann_column_select.param.update(options=new_options, value=new_value)
 
     def _auto_detect_style(self) -> None:
@@ -963,7 +989,7 @@ class SidebarControls:
             edge_label = {"left": "Rows, before", "right": "Rows, after",
                           "top": "Columns, before", "bottom": "Columns, after"}.get(edge, edge)
             subtitle = f"{style_label} \u00b7 {edge_label}"
-            esc_col = _html.escape(cfg["column"])
+            esc_col = _html.escape(prettify_name(cfg["column"]))
 
             # Determine grouping role badge
             role_badge = ""
@@ -1093,8 +1119,10 @@ class SidebarControls:
 
         return pn.Column(
             header_row,
+            self.title_input,
 
             _make_section_card("Scale & Colour", pn.Column(
+                self.value_description_input,
                 self.scale_method_select,
                 self.scale_axis_select,
                 self.colormap_select,

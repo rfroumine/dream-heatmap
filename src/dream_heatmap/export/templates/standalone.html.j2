@@ -81,8 +81,9 @@ function extractSubMatrix(matrix, origNCols, rowStart, rowEnd, colStart, colEnd)
  */
 function buildZoomedLayout(origLayout, nRows, nCols, cellSize) {
   var padding = 40;
+  var titleOffset = origLayout.titleY ? 28 : 0;
   var heatmapX = padding;
-  var heatmapY = padding;
+  var heatmapY = padding + titleOffset;
   var heatmapW = nCols * cellSize;
   var heatmapH = nRows * cellSize;
 
@@ -91,7 +92,7 @@ function buildZoomedLayout(origLayout, nRows, nCols, cellSize) {
   var colPositions = [];
   for (var c = 0; c < nCols; c++) colPositions.push(heatmapX + c * cellSize);
 
-  return {
+  var result = {
     heatmap: { x: heatmapX, y: heatmapY, width: heatmapW, height: heatmapH },
     rowPositions: rowPositions,
     colPositions: colPositions,
@@ -107,6 +108,10 @@ function buildZoomedLayout(origLayout, nRows, nCols, cellSize) {
     rightAnnotationWidth: 0,
     bottomAnnotationHeight: 0,
   };
+  if (origLayout.titleY) {
+    result.titleY = padding + 28 * 0.7;
+  }
+  return result;
 }
 
 /**
@@ -249,6 +254,10 @@ function buildZoomedResolver(origMapperData, positions, cellSize, start, end) {
       legendRenderer.clear();
       colorBarRenderer.clear();
     }
+
+    // Title
+    var titleText = origConfig.title || null;
+    svgOverlay.renderTitle(titleText, layout);
 
     // Labels
     if (showLabels && !zoomRange) {

@@ -57,6 +57,9 @@ class LayoutSpec:
     row_secondary_gap_indices: list[int] = field(default_factory=list)
     col_secondary_gap_indices: list[int] = field(default_factory=list)
 
+    # Title position (y-coordinate for centered title text)
+    title_y: float = 0.0
+
     def to_dict(self) -> dict:
         """Serialize to a dict for JSON transfer to JS."""
         d = {
@@ -83,6 +86,8 @@ class LayoutSpec:
             d["rowSecondaryGaps"] = self.row_secondary_gap_indices
         if self.col_secondary_gap_indices:
             d["colSecondaryGaps"] = self.col_secondary_gap_indices
+        if self.title_y > 0:
+            d["titleY"] = self.title_y
         return d
 
 
@@ -127,6 +132,8 @@ class LayoutComposer:
         # Per-gap sizing for hierarchical splits
         row_gap_sizes: dict[int, float] | None = None,
         col_gap_sizes: dict[int, float] | None = None,
+        # Title above the heatmap
+        title_height: float = 0.0,
         # Legacy compat: if callers still pass row_label_width/col_label_height
         row_label_width: float | None = None,
         col_label_height: float | None = None,
@@ -155,6 +162,7 @@ class LayoutComposer:
         )
         fixed_height = (
             self._padding * 2
+            + title_height
             + col_dendro_h
             + top_annotation_height
             + bottom_annotation_height
@@ -194,7 +202,7 @@ class LayoutComposer:
 
         # Heatmap origin shifts right/down for dendrograms + left annotations + left labels
         heatmap_x = self._padding + row_dendro_w + left_annotation_width + left_label_width
-        heatmap_y = self._padding + col_dendro_h + top_annotation_height + top_label_height
+        heatmap_y = self._padding + title_height + col_dendro_h + top_annotation_height + top_label_height
 
         row_layout = CellLayout(
             n_cells=n_rows,
@@ -245,6 +253,9 @@ class LayoutComposer:
         row_secondary = self._secondary_gap_indices(row_gap_sizes)
         col_secondary = self._secondary_gap_indices(col_gap_sizes)
 
+        # Title position: centered vertically in the title_height band
+        title_y_pos = (self._padding + title_height * 0.7) if title_height > 0 else 0.0
+
         return LayoutSpec(
             heatmap_rect=heatmap_rect,
             row_cell_layout=row_layout,
@@ -263,6 +274,7 @@ class LayoutComposer:
             legend_panel_rect=legend_panel_rect,
             row_secondary_gap_indices=row_secondary,
             col_secondary_gap_indices=col_secondary,
+            title_y=title_y_pos,
         )
 
     @staticmethod

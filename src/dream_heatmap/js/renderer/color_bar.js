@@ -19,7 +19,7 @@ class ColorBarRenderer {
    * @param {SVGElement} parentGroup - SVG group to append into
    * @returns {{width: number, height: number}} bounding box of rendered content
    */
-  renderInline(x, y, lut, vmin, vmax, title, parentGroup) {
+  renderInline(x, y, lut, vmin, vmax, title, parentGroup, subtitle) {
     var ns = "http://www.w3.org/2000/svg";
     var fontFamily = '"Outfit", system-ui, -apple-system, sans-serif';
     var barWidth = 120;
@@ -38,6 +38,21 @@ class ColorBarRenderer {
       titleEl.setAttribute("fill", "#334155");
       parentGroup.appendChild(titleEl);
       curY += 16;
+    }
+
+    // Subtitle (if provided) — smaller, italic, muted
+    if (subtitle) {
+      var subEl = document.createElementNS(ns, "text");
+      subEl.textContent = subtitle;
+      subEl.setAttribute("x", x);
+      subEl.setAttribute("y", curY + 9);
+      subEl.setAttribute("font-size", "9");
+      subEl.setAttribute("font-weight", "400");
+      subEl.setAttribute("font-style", "italic");
+      subEl.setAttribute("font-family", fontFamily);
+      subEl.setAttribute("fill", "#64748b");
+      parentGroup.appendChild(subEl);
+      curY += 14;
     }
 
     // Horizontal linear gradient

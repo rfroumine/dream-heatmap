@@ -44,6 +44,9 @@ class HTMLExporter:
         annotations: dict | None = None,
         labels: dict | None = None,
         legends: list[dict] | None = None,
+        color_bar_title: str | None = None,
+        color_bar_subtitle: str | None = None,
+        heatmap_title: str | None = None,
     ) -> None:
         """Write a standalone HTML file.
 
@@ -81,6 +84,12 @@ class HTMLExporter:
             config_extra["labels"] = labels
         if legends is not None:
             config_extra["legends"] = legends
+        if color_bar_title is not None:
+            config_extra["colorBarTitle"] = color_bar_title
+        if color_bar_subtitle is not None:
+            config_extra["colorBarSubtitle"] = color_bar_subtitle
+        if heatmap_title is not None:
+            config_extra["title"] = heatmap_title
 
         config_json = serialize_config(
             vmin=color_scale.vmin,

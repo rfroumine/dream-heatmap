@@ -13,6 +13,7 @@ from ..api import Heatmap
 from ..annotation.categorical import CategoricalAnnotation
 from ..annotation.minigraph import BarChartAnnotation
 from ..layout.annotation_layout import AnnotationLayoutEngine
+from ..display_utils import prettify_name
 
 
 class DashboardState(param.Parameterized):
@@ -70,6 +71,10 @@ class DashboardState(param.Parameterized):
 
     # --- Chart configs (list of dicts) ---
     chart_configs = param.List(default=[])
+
+    # --- Title & value description ---
+    title = param.String(default="")
+    value_description = param.String(default="")
 
     # --- Status text ---
     _status_text = param.String(default="")
@@ -152,6 +157,7 @@ class DashboardState(param.Parameterized):
         "row_label_side", "col_label_side",
         "show_row_dendro", "show_col_dendro",
         "annotations",
+        "title", "value_description",
         watch=True,
     )
     def _rebuild_heatmap(self):
@@ -202,6 +208,14 @@ class DashboardState(param.Parameterized):
             if col_label:
                 parts.append(f"{col_label} (col-wise)")
             color_bar_title = " + ".join(parts) if parts else None
+
+            # Title
+            if self.title:
+                hm.set_title(self.title)
+
+            # Value description
+            if self.value_description:
+                hm.set_value_description(self.value_description)
 
             # Color scale
             hm.set_colormap(
@@ -302,6 +316,21 @@ class DashboardState(param.Parameterized):
 
             # Compute layout and push to pane
             hm._compute_layout()
+
+            # Build original (unscaled) matrix if scaling is active
+            is_scaled = (self.row_scale_method != "none" or self.col_scale_method != "none")
+            original_matrix = None
+            if is_scaled:
+                from ..core.matrix import MatrixData as _MD
+                original_md = _MD(self.data)
+                original_matrix = original_md.slice(
+                    hm._row_mapper.visual_order, hm._col_mapper.visual_order,
+                )
+
+            # Determine color bar title/subtitle
+            cb_title = hm._value_description or hm._color_bar_title
+            cb_subtitle = hm._color_bar_title if hm._value_description else None
+
             self._heatmap_pane.set_data(
                 matrix=hm._matrix,
                 color_scale=hm._color_scale,
@@ -312,7 +341,10 @@ class DashboardState(param.Parameterized):
                 annotations=hm._build_annotation_data(),
                 labels=hm._build_label_data(),
                 legends=hm._build_legend_data(),
-                color_bar_title=hm._color_bar_title,
+                color_bar_title=cb_title,
+                color_bar_subtitle=cb_subtitle,
+                title=hm._title,
+                original_matrix=original_matrix,
             )
 
             self._current_hm = hm
@@ -384,17 +416,17 @@ class DashboardState(param.Parameterized):
             if metadata is None or column not in metadata.columns:
                 return None
             values = metadata[column]
-            return CategoricalAnnotation(name=column, values=values)
+            return CategoricalAnnotation(name=prettify_name(column), values=values)
 
         elif ann_type == "bar":
             # For bar charts: use metadata numeric cols or expression row
             if metadata is not None and column in metadata.columns:
                 values = metadata[column]
-                return BarChartAnnotation(name=column, values=values)
+                return BarChartAnnotation(name=prettify_name(column), values=values)
             # Check expression matrix rows (markers)
             if self.data is not None and column in self.data.index:
                 values = self.data.loc[column]
-                return BarChartAnnotation(name=column, values=values)
+                return BarChartAnnotation(name=prettify_name(column), values=values)
             return None
 
         return None
@@ -503,6 +535,19 @@ class DashboardState(param.Parameterized):
             # Dendrograms not meaningful after zoom
             zoomed_dendrograms = None if zoom_range is not None else hm._build_dendrogram_data()
 
+            cb_title = hm._value_description or hm._color_bar_title
+            cb_subtitle = hm._color_bar_title if hm._value_description else None
+
+            # Build original matrix for zoom view (if scaling active)
+            is_scaled = (self.row_scale_method != "none" or self.col_scale_method != "none")
+            zoomed_original = None
+            if is_scaled:
+                from ..core.matrix import MatrixData as _MD
+                original_md = _MD(self.data)
+                zoomed_original = original_md.slice(
+                    zoomed_row.visual_order, zoomed_col.visual_order,
+                )
+
             self._heatmap_pane.set_data(
                 matrix=zoomed_matrix,
                 color_scale=hm._color_scale,
@@ -513,7 +558,10 @@ class DashboardState(param.Parameterized):
                 annotations=zoomed_annotations,
                 labels=zoomed_labels,
                 legends=hm._build_legend_data(),
-                color_bar_title=hm._color_bar_title,
+                color_bar_title=cb_title,
+                color_bar_subtitle=cb_subtitle,
+                title=hm._title,
+                original_matrix=zoomed_original,
             )
         except Exception:
             traceback.print_exc()

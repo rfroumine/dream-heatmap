@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from ..display_utils import prettify_name
+
 
 # Color constants
 COLOR_ALL = "rgba(180, 180, 180, 0.5)"
@@ -56,6 +58,7 @@ def build_box(
     selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a box plot with All vs Selected traces."""
+    name = prettify_name(name) if name else name
     fig = go.Figure()
 
     fig.add_trace(go.Box(
@@ -86,6 +89,7 @@ def build_violin(
     selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a violin plot with All vs Selected traces."""
+    name = prettify_name(name) if name else name
     fig = go.Figure()
 
     fig.add_trace(go.Violin(
@@ -116,6 +120,7 @@ def build_bar(
     selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a bar chart showing value counts (categorical data)."""
+    name = prettify_name(name) if name else name
     fig = go.Figure()
 
     all_counts = values.value_counts().sort_index()
@@ -158,6 +163,8 @@ def build_scatter(
     selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a scatter plot with All vs Selected points."""
+    x_name = prettify_name(x_name) if x_name else x_name
+    y_name = prettify_name(y_name) if y_name else y_name
     fig = go.Figure()
 
     fig.add_trace(go.Scattergl(
@@ -192,6 +199,7 @@ def build_histogram(
     selected_label: str = "Selected",
 ) -> go.Figure:
     """Build a histogram with All vs Selected traces."""
+    name = prettify_name(name) if name else name
     fig = go.Figure()
 
     fig.add_trace(go.Histogram(

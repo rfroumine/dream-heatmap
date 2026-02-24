@@ -199,6 +199,8 @@ class HeatmapWidget(_BaseWidget):
         labels: dict | None = None,
         legends: list[dict] | None = None,
         color_bar_title: str | None = None,
+        color_bar_subtitle: str | None = None,
+        title: str | None = None,
         **kwargs,
     ) -> None:
         _check_anywidget()
@@ -217,6 +219,10 @@ class HeatmapWidget(_BaseWidget):
             config_extra["legends"] = legends
         if color_bar_title is not None:
             config_extra["colorBarTitle"] = color_bar_title
+        if color_bar_subtitle is not None:
+            config_extra["colorBarSubtitle"] = color_bar_subtitle
+        if title is not None:
+            config_extra["title"] = title
 
         super().__init__(
             _esm=js_source,
@@ -301,6 +307,8 @@ class HeatmapWidget(_BaseWidget):
         labels: dict | None = None,
         legends: list[dict] | None = None,
         color_bar_title: str | None = None,
+        color_bar_subtitle: str | None = None,
+        title: str | None = None,
     ) -> None:
         """Push updated data to JS (e.g., after zoom or reorder).
 
@@ -318,6 +326,10 @@ class HeatmapWidget(_BaseWidget):
             config_extra["legends"] = legends
         if color_bar_title is not None:
             config_extra["colorBarTitle"] = color_bar_title
+        if color_bar_subtitle is not None:
+            config_extra["colorBarSubtitle"] = color_bar_subtitle
+        if title is not None:
+            config_extra["title"] = title
 
         with self.hold_sync():
             self.matrix_bytes = serialize_matrix(matrix)

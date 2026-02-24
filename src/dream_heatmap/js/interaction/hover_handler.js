@@ -35,12 +35,13 @@ class HoverHandler {
   /**
    * Update the data context (called after each render).
    */
-  setContext(layout, matrix, rowResolver, colResolver, colorMapper) {
+  setContext(layout, matrix, rowResolver, colResolver, colorMapper, originalMatrix) {
     this._layout = layout;
     this._matrix = matrix;
     this._rowResolver = rowResolver;
     this._colResolver = colResolver;
     this._colorMapper = colorMapper || null;
+    this._originalMatrix = originalMatrix || null;
   }
 
   /** Toggle crosshair on/off. */
@@ -79,6 +80,15 @@ class HoverHandler {
       const value = this._matrix[rowIdx * this._layout.nCols + colIdx];
       const displayVal = isFinite(value) ? value.toPrecision(4) : "NaN";
 
+      // Original (raw) value when scaling is applied
+      let origStr = "";
+      if (this._originalMatrix) {
+        const origValue = this._originalMatrix[rowIdx * this._layout.nCols + colIdx];
+        if (isFinite(origValue)) {
+          origStr = ` (raw: ${origValue.toPrecision(4)})`;
+        }
+      }
+
       // Build rich tooltip HTML with color swatch
       let swatchHtml = "";
       if (this._colorMapper && isFinite(value)) {
@@ -91,7 +101,7 @@ class HoverHandler {
       this._tooltip.innerHTML =
         `<span class="dh-tip-label">Row</span> <span class="dh-tip-value">${this._escHtml(rowId)}</span><br>` +
         `<span class="dh-tip-label">Col</span> <span class="dh-tip-value">${this._escHtml(colId)}</span><br>` +
-        `<span class="dh-tip-label">Value</span> ${swatchHtml}<span class="dh-tip-value">${displayVal}</span>`;
+        `<span class="dh-tip-label">Value</span> ${swatchHtml}<span class="dh-tip-value">${displayVal}${origStr}</span>`;
       this._tooltip.style.display = "block";
       this._showingCellTooltip = true;
 

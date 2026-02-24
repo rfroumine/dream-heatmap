@@ -237,10 +237,11 @@ export function render({ model, el }) {
     // Render color bar + categorical legends
     const legends = config.legends || null;
     const colorBarTitle = config.colorBarTitle || null;
+    const colorBarSubtitle = config.colorBarSubtitle || null;
     if (layout.legendPanel || layout.hasColorBar) {
       legendRenderer.render(
         legends, layout.legendPanel,
-        colorBarRenderer, lut, config.vmin, config.vmax, colorBarTitle
+        colorBarRenderer, lut, config.vmin, config.vmax, colorBarTitle, colorBarSubtitle
       );
     } else {
       legendRenderer.clear();
@@ -251,8 +252,16 @@ export function render({ model, el }) {
     const labels = config.labels || null;
     svgOverlay.renderLabels(labels, layout);
 
+    // Render title
+    const titleText = config.title || null;
+    svgOverlay.renderTitle(titleText, layout);
+
+    // Decode original (unscaled) matrix if available
+    const originalMatrixBytes = sync.getOriginalMatrixBytes();
+    const originalMatrix = originalMatrixBytes ? decodeMatrixBytes(originalMatrixBytes) : null;
+
     // Update handler contexts
-    hoverHandler.setContext(layout, matrix, rowResolver, colResolver, colorMapper);
+    hoverHandler.setContext(layout, matrix, rowResolver, colResolver, colorMapper, originalMatrix);
     selectionHandler.setContext(layout, rowResolver, colResolver);
     zoomHandler.setContext(layout, rowResolver, colResolver);
 
@@ -311,6 +320,7 @@ class HeatmapPane(pn.custom.JSComponent):
     # Python -> JS (base64 for binary data, JSON strings for structured data)
     matrix_b64 = param.String(default="")
     color_lut_b64 = param.String(default="")
+    original_matrix_b64 = param.String(default="")
     layout_json = param.String(default="{}")
     id_mappers_json = param.String(default="{}")
     config_json = param.String(default="{}")
@@ -334,6 +344,9 @@ class HeatmapPane(pn.custom.JSComponent):
         labels: dict | None = None,
         legends: list[dict] | None = None,
         color_bar_title: str | None = None,
+        color_bar_subtitle: str | None = None,
+        title: str | None = None,
+        original_matrix: MatrixData | None = None,
     ) -> None:
         """Serialize and push heatmap data to JS for rendering."""
         # Encode binary data as base64
@@ -343,6 +356,14 @@ class HeatmapPane(pn.custom.JSComponent):
         self.color_lut_b64 = base64.b64encode(
             serialize_color_lut(color_scale)
         ).decode("ascii")
+
+        # Original (unscaled) matrix for hover display
+        if original_matrix is not None:
+            self.original_matrix_b64 = base64.b64encode(
+                serialize_matrix(original_matrix)
+            ).decode("ascii")
+        else:
+            self.original_matrix_b64 = ""
 
         # JSON strings
         self.layout_json = serialize_layout(layout)
@@ -360,6 +381,10 @@ class HeatmapPane(pn.custom.JSComponent):
             config_extra["legends"] = legends
         if color_bar_title is not None:
             config_extra["colorBarTitle"] = color_bar_title
+        if color_bar_subtitle is not None:
+            config_extra["colorBarSubtitle"] = color_bar_subtitle
+        if title is not None:
+            config_extra["title"] = title
 
         self.config_json = serialize_config(
             vmin=color_scale.vmin,

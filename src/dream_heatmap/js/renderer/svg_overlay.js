@@ -1201,5 +1201,40 @@ class SVGOverlay {
     this._annotationGroup = null;
     this._labelGroup = null;
     this._crosshairGroup = null;
+    this._titleGroup = null;
+  }
+
+  /**
+   * Render a centered title above the heatmap.
+   * @param {string|null} title - Title text (null to hide)
+   * @param {object} layout - Layout spec with heatmap rect and titleY
+   */
+  renderTitle(title, layout) {
+    // Remove old title group
+    if (this._titleGroup && this._titleGroup.parentNode) {
+      this._titleGroup.parentNode.removeChild(this._titleGroup);
+    }
+    this._titleGroup = null;
+
+    if (!title || !layout || !layout.titleY) return;
+
+    var ns = "http://www.w3.org/2000/svg";
+    this._titleGroup = document.createElementNS(ns, "g");
+    this._titleGroup.setAttribute("class", "dh-title");
+    this._titleGroup.style.pointerEvents = "none";
+
+    var text = document.createElementNS(ns, "text");
+    text.textContent = title;
+    var cx = layout.heatmap.x + layout.heatmap.width / 2;
+    text.setAttribute("x", cx);
+    text.setAttribute("y", layout.titleY);
+    text.setAttribute("text-anchor", "middle");
+    text.setAttribute("font-size", "16");
+    text.setAttribute("font-weight", "600");
+    text.setAttribute("font-family", '"Outfit", system-ui, -apple-system, sans-serif');
+    text.setAttribute("fill", "#1e293b");
+    this._titleGroup.appendChild(text);
+
+    this.svg.appendChild(this._titleGroup);
   }
 }
