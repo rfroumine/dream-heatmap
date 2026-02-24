@@ -1006,7 +1006,7 @@ class Heatmap:
         legends: list[dict] = []
 
         for edge in ("top", "bottom", "left", "right"):
-            for track in self._annotations[edge]:
+            for track in reversed(self._annotations[edge]):
                 if not isinstance(track, CategoricalAnnotation):
                     continue
                 color_map = track.colors
