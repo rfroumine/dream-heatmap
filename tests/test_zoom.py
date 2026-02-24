@@ -104,6 +104,32 @@ class TestHeatmapZoom:
         assert hm._row_mapper.size == 4
         assert hm._col_mapper.size == 3
 
+    def test_title_persists_after_zoom_reset(self, small_matrix_df):
+        """Title Y must be non-zero after zoom reset when title is set."""
+        from dream_heatmap.api import Heatmap
+        hm = Heatmap(small_matrix_df)
+        hm.set_title("My Title")
+        hm._compute_layout()
+        original_title_y = hm._layout.title_y
+        assert original_title_y > 0
+
+        # Simulate zoom then reset: re-compute layout as _handle_zoom does
+        zoomed_row = hm._row_mapper.apply_zoom(0, 2)
+        zoomed_col = hm._col_mapper.apply_zoom(0, 2)
+        zoomed_layout = hm._layout_composer.compute(
+            zoomed_row, zoomed_col,
+            title_height=28.0 if hm._title else 0.0,
+        )
+        assert zoomed_layout.title_y > 0
+
+        # Reset: full mappers, title_height still passed
+        reset_layout = hm._layout_composer.compute(
+            hm._row_mapper, hm._col_mapper,
+            title_height=28.0 if hm._title else 0.0,
+        )
+        assert reset_layout.title_y > 0
+        assert reset_layout.title_y == original_title_y
+
 
 # --- MatrixData.slice ---
 

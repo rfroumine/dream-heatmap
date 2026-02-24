@@ -347,3 +347,39 @@ class TestEdgeCases:
         )
         assert isinstance(hm, Heatmap)
         assert_mapper_invariants(hm._row_mapper, {"g1", "g2", "g3", "g4"})
+
+
+class TestDendrogramSide:
+    """Test dendrogram side placement via set_dendro_side()."""
+
+    def test_default_side(self, gene_patient_data):
+        df, row_meta, col_meta = gene_patient_data
+        hm = Heatmap(df).cluster_rows().cluster_cols()
+        hm._compute_layout()
+        dendro_data = hm._build_dendrogram_data()
+        assert dendro_data["row"]["side"] == "left"
+        assert dendro_data["col"]["side"] == "top"
+
+    def test_right_row_dendro(self, gene_patient_data):
+        df, row_meta, col_meta = gene_patient_data
+        hm = Heatmap(df).set_dendro_side(row_side="right").cluster_rows()
+        hm._compute_layout()
+        dendro_data = hm._build_dendrogram_data()
+        assert dendro_data["row"]["side"] == "right"
+        assert hm._layout.row_dendro_side == "right"
+
+    def test_bottom_col_dendro(self, gene_patient_data):
+        df, row_meta, col_meta = gene_patient_data
+        hm = Heatmap(df).set_dendro_side(col_side="bottom").cluster_cols()
+        hm._compute_layout()
+        dendro_data = hm._build_dendrogram_data()
+        assert dendro_data["col"]["side"] == "bottom"
+        assert hm._layout.col_dendro_side == "bottom"
+
+    def test_invalid_side_raises(self, gene_patient_data):
+        df, row_meta, col_meta = gene_patient_data
+        hm = Heatmap(df)
+        with pytest.raises(ValueError, match="row_side must be"):
+            hm.set_dendro_side(row_side="top")
+        with pytest.raises(ValueError, match="col_side must be"):
+            hm.set_dendro_side(col_side="left")

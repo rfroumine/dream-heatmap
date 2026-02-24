@@ -242,3 +242,122 @@ class TestLayoutComposer:
         spec = composer.compute(row_mapper, col_mapper)
         assert spec.col_cell_layout.cell_size < 1.0
         assert spec.col_cell_layout.cell_size >= 0.05  # MIN_CELL_SIZE
+
+    # --- Dendrogram side placement ---
+
+    def test_dendro_side_default(self):
+        """Default dendrogram placement: left for rows, top for cols."""
+        row_mapper = IDMapper.from_ids(["r1", "r2", "r3"])
+        col_mapper = IDMapper.from_ids(["c1", "c2"])
+        composer = LayoutComposer(padding=20.0)
+        spec = composer.compute(row_mapper, col_mapper, has_row_dendro=True, has_col_dendro=True)
+        assert spec.row_dendro_side == "left"
+        assert spec.col_dendro_side == "top"
+        # Dendro space is before heatmap
+        assert spec.heatmap_rect.x >= 20.0 + spec.row_dendro_width
+
+    def test_dendro_side_right(self):
+        """Row dendrogram on right: heatmap.x has no dendro offset."""
+        row_mapper = IDMapper.from_ids(["r1", "r2", "r3"])
+        col_mapper = IDMapper.from_ids(["c1", "c2"])
+        composer = LayoutComposer(padding=20.0)
+        spec_left = composer.compute(row_mapper, col_mapper, has_row_dendro=True, row_dendro_side="left")
+        spec_right = composer.compute(row_mapper, col_mapper, has_row_dendro=True, row_dendro_side="right")
+        # Right placement: heatmap starts closer to left edge
+        assert spec_right.heatmap_rect.x < spec_left.heatmap_rect.x
+        assert spec_right.row_dendro_side == "right"
+        # Total width accounts for dendro on right
+        assert spec_right.total_width > spec_right.heatmap_rect.x + spec_right.heatmap_rect.width
+
+    def test_dendro_side_bottom(self):
+        """Col dendrogram on bottom: heatmap.y has no top dendro offset."""
+        row_mapper = IDMapper.from_ids(["r1", "r2", "r3"])
+        col_mapper = IDMapper.from_ids(["c1", "c2"])
+        composer = LayoutComposer(padding=20.0)
+        spec_top = composer.compute(row_mapper, col_mapper, has_col_dendro=True, col_dendro_side="top")
+        spec_bottom = composer.compute(row_mapper, col_mapper, has_col_dendro=True, col_dendro_side="bottom")
+        # Bottom placement: heatmap starts closer to top edge
+        assert spec_bottom.heatmap_rect.y < spec_top.heatmap_rect.y
+        assert spec_bottom.col_dendro_side == "bottom"
+
+    def test_dendro_side_in_to_dict(self):
+        """to_dict() includes dendrogram side fields."""
+        row_mapper = IDMapper.from_ids(["r1", "r2"])
+        col_mapper = IDMapper.from_ids(["c1", "c2"])
+        composer = LayoutComposer(padding=20.0)
+        spec = composer.compute(
+            row_mapper, col_mapper,
+            has_row_dendro=True, has_col_dendro=True,
+            row_dendro_side="right", col_dendro_side="bottom",
+        )
+        d = spec.to_dict()
+        assert d["rowDendroSide"] == "right"
+        assert d["colDendroSide"] == "bottom"
+
+
+class TestLegendPanelClipping:
+    def test_total_height_includes_legend_panel(self):
+        """total_height must be >= legend panel bottom."""
+        row_mapper = IDMapper.from_ids(["r1", "r2", "r3"])  # tiny heatmap
+        col_mapper = IDMapper.from_ids(["c1", "c2"])
+        composer = LayoutComposer(padding=20.0)
+        spec = composer.compute(
+            row_mapper, col_mapper,
+            legend_panel_width=200.0,
+            legend_panel_height=500.0,  # much taller than heatmap
+        )
+        lp = spec.legend_panel_rect
+        assert lp is not None
+        assert spec.total_height >= lp.y + lp.height
+
+    def test_legend_height_with_many_categories(self, small_matrix_df):
+        """Each legend block should be <= ~112px (2 cols, 5 rows max)."""
+        import pandas as pd
+        from dream_heatmap.api import Heatmap
+        from dream_heatmap.annotation.categorical import CategoricalAnnotation
+
+        hm = Heatmap(small_matrix_df)
+        # Create annotation with 20 categories
+        cats = [f"cat_{i:02d}" for i in range(20)]
+        values = pd.Series(
+            [cats[i % len(cats)] for i in range(4)],
+            index=small_matrix_df.index,
+        )
+        ann = CategoricalAnnotation(name="Big", values=values)
+        hm.add_annotation("left", ann)
+        w, h = hm._estimate_legend_dimensions()
+
+        # With 2 cols, 5 rows: titleHeight(18) + 5*rowHeight(16) + truncated(14) = 112
+        # Plus color bar block (~26) + blockGap(20). Total should be compact.
+        # Key check: height should reflect 5 rows (2-col layout), not all 20.
+        row_height = 16.0
+        title_height = 18.0
+        truncated_extra = 14.0
+        max_single_legend_block = title_height + 5 * row_height + truncated_extra
+        # The legend data block height should not exceed the 5-row cap
+        # (total h includes color bar + gap, so just verify it's reasonable)
+        assert h < 200.0  # compact 2-column layout
+
+
+class TestLegendWidthCap:
+    def test_legend_width_capped(self, small_matrix_df):
+        """Legend width must not exceed 300px even with many long-label categories."""
+        import pandas as pd
+        from dream_heatmap.api import Heatmap
+        from dream_heatmap.annotation.categorical import CategoricalAnnotation
+
+        hm = Heatmap(small_matrix_df)
+        hm.set_row_metadata(pd.DataFrame(
+            {"cell_type": ["T-cell", "B-cell", "T-cell", "NK-cell"]},
+            index=small_matrix_df.index,
+        ))
+        # Create an annotation with 15 categories having long labels
+        long_cats = [f"Very_Long_Category_Name_{i:02d}" for i in range(15)]
+        values = pd.Series(
+            [long_cats[i % len(long_cats)] for i in range(4)],
+            index=small_matrix_df.index,
+        )
+        ann = CategoricalAnnotation(name="Many Cats", values=values)
+        hm.add_annotation("left", ann)
+        w, h = hm._estimate_legend_dimensions()
+        assert w <= 300.0

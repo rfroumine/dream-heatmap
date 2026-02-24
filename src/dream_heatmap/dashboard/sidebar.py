@@ -315,6 +315,12 @@ class SidebarControls:
             name="Show dendrogram", value=s.show_row_dendro,
             visible=is_row_clustering,
         )
+        self.row_dendro_side_select = pn.widgets.Select(
+            name="Dendrogram side", value=s.row_dendro_side,
+            options=["left", "right"],
+            visible=is_row_clustering and s.show_row_dendro,
+            sizing_mode="stretch_width",
+        )
 
         # COL grouping
         col_primary_init = s.col_group_by[0] if len(s.col_group_by) >= 1 else ""
@@ -356,6 +362,12 @@ class SidebarControls:
         self.show_col_dendro_toggle = pn.widgets.Checkbox(
             name="Show dendrogram", value=s.show_col_dendro,
             visible=is_col_clustering,
+        )
+        self.col_dendro_side_select = pn.widgets.Select(
+            name="Dendrogram side", value=s.col_dendro_side,
+            options=["top", "bottom"],
+            visible=is_col_clustering and s.show_col_dendro,
+            sizing_mode="stretch_width",
         )
 
         # ── Step 3: Annotation builder ──
@@ -491,6 +503,12 @@ class SidebarControls:
         self.show_row_dendro_toggle.param.watch(
             lambda e: self._set_state("show_row_dendro", e.new), "value",
         )
+        self.show_row_dendro_toggle.param.watch(
+            lambda e: setattr(self.row_dendro_side_select, "visible", e.new), "value",
+        )
+        self.row_dendro_side_select.param.watch(
+            lambda e: self._set_state("row_dendro_side", e.new), "value",
+        )
 
         # Col grouping
         self.col_group_primary.param.watch(self._on_col_grouping_changed, "value")
@@ -506,6 +524,12 @@ class SidebarControls:
         )
         self.show_col_dendro_toggle.param.watch(
             lambda e: self._set_state("show_col_dendro", e.new), "value",
+        )
+        self.show_col_dendro_toggle.param.watch(
+            lambda e: setattr(self.col_dendro_side_select, "visible", e.new), "value",
+        )
+        self.col_dendro_side_select.param.watch(
+            lambda e: self._set_state("col_dendro_side", e.new), "value",
         )
 
         # Status text: watch state._status_text and update the pane
@@ -624,6 +648,7 @@ class SidebarControls:
             self.row_cluster_method_select.visible = False
             self.row_cluster_metric_select.visible = False
             self.show_row_dendro_toggle.visible = False
+            self.row_dendro_side_select.visible = False
         finally:
             self._syncing = False
 
@@ -672,6 +697,7 @@ class SidebarControls:
             self.col_cluster_method_select.visible = False
             self.col_cluster_metric_select.visible = False
             self.show_col_dendro_toggle.visible = False
+            self.col_dendro_side_select.visible = False
         finally:
             self._syncing = False
 
@@ -775,6 +801,7 @@ class SidebarControls:
         self.row_cluster_method_select.visible = is_clustering
         self.row_cluster_metric_select.visible = is_clustering
         self.show_row_dendro_toggle.visible = is_clustering
+        self.row_dendro_side_select.visible = is_clustering and self.show_row_dendro_toggle.value
         self._set_state("row_cluster_mode", mode)
 
     def _on_col_cluster_mode_changed(self, event) -> None:
@@ -785,6 +812,7 @@ class SidebarControls:
         self.col_cluster_method_select.visible = is_clustering
         self.col_cluster_metric_select.visible = is_clustering
         self.show_col_dendro_toggle.visible = is_clustering
+        self.col_dendro_side_select.visible = is_clustering and self.show_col_dendro_toggle.value
         self._set_state("col_cluster_mode", mode)
 
     def _on_cluster_param_changed(self, param_name: str, value: str) -> None:
@@ -1094,6 +1122,7 @@ class SidebarControls:
             self.row_cluster_method_select,
             self.row_cluster_metric_select,
             self.show_row_dendro_toggle,
+            self.row_dendro_side_select,
             sizing_mode="stretch_width",
         )
 
@@ -1106,6 +1135,7 @@ class SidebarControls:
             self.col_cluster_method_select,
             self.col_cluster_metric_select,
             self.show_col_dendro_toggle,
+            self.col_dendro_side_select,
             sizing_mode="stretch_width",
         )
 

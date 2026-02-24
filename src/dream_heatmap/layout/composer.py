@@ -40,6 +40,8 @@ class LayoutSpec:
     # Dendrogram space
     row_dendro_width: float = 0.0
     col_dendro_height: float = 0.0
+    row_dendro_side: str = "left"
+    col_dendro_side: str = "top"
 
     # Color bar rendered in legend panel (flag only, no separate rect)
     has_color_bar: bool = True
@@ -74,6 +76,8 @@ class LayoutSpec:
             "nCols": self.n_cols,
             "rowDendroWidth": self.row_dendro_width,
             "colDendroHeight": self.col_dendro_height,
+            "rowDendroSide": self.row_dendro_side,
+            "colDendroSide": self.col_dendro_side,
             "hasColorBar": self.has_color_bar,
             "leftAnnotationWidth": self.left_annotation_width,
             "rightAnnotationWidth": self.right_annotation_width,
@@ -134,6 +138,9 @@ class LayoutComposer:
         col_gap_sizes: dict[int, float] | None = None,
         # Title above the heatmap
         title_height: float = 0.0,
+        # Dendrogram placement side
+        row_dendro_side: str = "left",
+        col_dendro_side: str = "top",
         # Legacy compat: if callers still pass row_label_width/col_label_height
         row_label_width: float | None = None,
         col_label_height: float | None = None,
@@ -148,13 +155,25 @@ class LayoutComposer:
         row_dendro_w = self._dendro_height if has_row_dendro else 0.0
         col_dendro_h = self._dendro_height if has_col_dendro else 0.0
 
+        # Split dendro space based on side placement
+        left_dendro_w = row_dendro_w if row_dendro_side == "left" else 0.0
+        right_dendro_w = row_dendro_w if row_dendro_side == "right" else 0.0
+        top_dendro_h = col_dendro_h if col_dendro_side == "top" else 0.0
+        bottom_dendro_h = col_dendro_h if col_dendro_side == "bottom" else 0.0
+
         n_rows = row_mapper.size
         n_cols = col_mapper.size
 
+        # Legend panel extends beyond max_width (not in cell budget)
+        has_legend = legend_panel_width > 0 and legend_panel_height > 0
+        legend_gap = 15.0
+        right_padding = 0.0 if has_legend else self._padding
+
         # Fixed pixel components (everything except cell grid and gaps)
         fixed_width = (
-            self._padding * 2
-            + row_dendro_w
+            self._padding + right_padding
+            + left_dendro_w
+            + right_dendro_w
             + left_annotation_width
             + right_annotation_width
             + left_label_width
@@ -163,7 +182,8 @@ class LayoutComposer:
         fixed_height = (
             self._padding * 2
             + title_height
-            + col_dendro_h
+            + top_dendro_h
+            + bottom_dendro_h
             + top_annotation_height
             + bottom_annotation_height
             + top_label_height
@@ -201,8 +221,8 @@ class LayoutComposer:
         row_cell_size = max(MIN_CELL_SIZE, min(MAX_CELL_SIZE, row_cell_size))
 
         # Heatmap origin shifts right/down for dendrograms + left annotations + left labels
-        heatmap_x = self._padding + row_dendro_w + left_annotation_width + left_label_width
-        heatmap_y = self._padding + title_height + col_dendro_h + top_annotation_height + top_label_height
+        heatmap_x = self._padding + left_dendro_w + left_annotation_width + left_label_width
+        heatmap_y = self._padding + title_height + top_dendro_h + top_annotation_height + top_label_height
 
         row_layout = CellLayout(
             n_cells=n_rows,
@@ -230,14 +250,13 @@ class LayoutComposer:
 
         legend_panel_rect = None
 
-        total_width = heatmap_x + col_layout.total_size + right_annotation_width + right_label_width + self._padding
+        total_width = heatmap_x + col_layout.total_size + right_annotation_width + right_label_width + right_dendro_w + right_padding
 
-        # Total height: heatmap + bottom annotations/labels + padding
-        heatmap_bottom = heatmap_y + row_layout.total_size + bottom_annotation_height + bottom_label_height
+        # Total height: heatmap + bottom annotations/labels + bottom dendro + padding
+        heatmap_bottom = heatmap_y + row_layout.total_size + bottom_annotation_height + bottom_label_height + bottom_dendro_h
 
         # Legend panel to the right of the heatmap area
         if legend_panel_height > 0 and legend_panel_width > 0:
-            legend_gap = 60.0  # large gap between heatmap and legend column
             lp_x = total_width + legend_gap
             lp_y = heatmap_y  # top-aligned with heatmap
             legend_panel_rect = Rect(
@@ -245,9 +264,10 @@ class LayoutComposer:
                 width=legend_panel_width,
                 height=legend_panel_height,
             )
-            total_width = lp_x + legend_panel_width + self._padding
+            total_width = lp_x + legend_panel_width + 5.0
 
-        total_height = heatmap_bottom + self._padding
+        legend_bottom = (lp_y + legend_panel_height) if legend_panel_rect else 0.0
+        total_height = max(heatmap_bottom, legend_bottom) + self._padding
 
         # Compute secondary gap indices: positions where gap < max gap size
         row_secondary = self._secondary_gap_indices(row_gap_sizes)
@@ -266,6 +286,8 @@ class LayoutComposer:
             n_cols=col_mapper.size,
             row_dendro_width=row_dendro_w,
             col_dendro_height=col_dendro_h,
+            row_dendro_side=row_dendro_side,
+            col_dendro_side=col_dendro_side,
             has_color_bar=True,
             left_annotation_width=left_annotation_width,
             right_annotation_width=right_annotation_width,

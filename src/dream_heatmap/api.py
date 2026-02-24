@@ -78,6 +78,10 @@ class Heatmap:
         self._show_row_dendro: bool = True
         self._show_col_dendro: bool = True
 
+        # Dendrogram side: which edge to place the dendrogram on
+        self._row_dendro_side: str = "left"   # "left" or "right"
+        self._col_dendro_side: str = "top"    # "top" or "bottom"
+
         # Layout
         self._layout_composer = LayoutComposer()
         self._layout: LayoutSpec | None = None
@@ -445,6 +449,32 @@ class Heatmap:
             self._col_label_side = col_side
         return self
 
+    # --- Dendrogram placement ---
+
+    def set_dendro_side(
+        self,
+        row_side: str | None = None,
+        col_side: str | None = None,
+    ) -> Heatmap:
+        """Control which edge dendrograms are placed on.
+
+        Parameters
+        ----------
+        row_side : str, optional
+            'left' or 'right' (default 'left').
+        col_side : str, optional
+            'top' or 'bottom' (default 'top').
+        """
+        if row_side is not None:
+            if row_side not in ("left", "right"):
+                raise ValueError(f"row_side must be 'left' or 'right', got '{row_side}'")
+            self._row_dendro_side = row_side
+        if col_side is not None:
+            if col_side not in ("top", "bottom"):
+                raise ValueError(f"col_side must be 'top' or 'bottom', got '{col_side}'")
+            self._col_dendro_side = col_side
+        return self
+
     # --- Concatenation ---
 
     @classmethod
@@ -639,6 +669,8 @@ class Heatmap:
             row_gap_sizes=zoomed_row_gap_sizes,
             col_gap_sizes=zoomed_col_gap_sizes,
             title_height=28.0 if self._title else 0.0,
+            row_dendro_side=self._row_dendro_side,
+            col_dendro_side=self._col_dendro_side,
         )
 
         # Rebuild annotations and labels for zoomed mappers
@@ -807,6 +839,8 @@ class Heatmap:
             row_gap_sizes=self._row_gap_sizes,
             col_gap_sizes=self._col_gap_sizes,
             title_height=28.0 if self._title else 0.0,
+            row_dendro_side=self._row_dendro_side,
+            col_dendro_side=self._col_dendro_side,
         )
 
     def _build_dendrogram_data(self) -> dict | None:
@@ -819,7 +853,7 @@ class Heatmap:
         if self._row_cluster is not None and self._show_row_dendro and self._layout is not None:
             row_specs = self._build_axis_dendrograms(
                 self._row_cluster, self._row_mapper,
-                self._layout.row_cell_layout, "left",
+                self._layout.row_cell_layout, self._row_dendro_side,
             )
             if row_specs:
                 # Merge all group dendrograms into one spec
@@ -828,7 +862,7 @@ class Heatmap:
                     all_links.extend(link.to_dict() for link in spec.links)
                 result["row"] = {
                     "links": all_links,
-                    "side": "left",
+                    "side": self._row_dendro_side,
                     "offset": 0.0,
                     "extent": self._layout.row_dendro_width,
                 }
@@ -836,7 +870,7 @@ class Heatmap:
         if self._col_cluster is not None and self._show_col_dendro and self._layout is not None:
             col_specs = self._build_axis_dendrograms(
                 self._col_cluster, self._col_mapper,
-                self._layout.col_cell_layout, "top",
+                self._layout.col_cell_layout, self._col_dendro_side,
             )
             if col_specs:
                 all_links = []
@@ -844,7 +878,7 @@ class Heatmap:
                     all_links.extend(link.to_dict() for link in spec.links)
                 result["col"] = {
                     "links": all_links,
-                    "side": "top",
+                    "side": self._col_dendro_side,
                     "offset": 0.0,
                     "extent": self._layout.col_dendro_height,
                 }
@@ -1034,16 +1068,13 @@ class Heatmap:
         row_height = 16.0
         title_height = 18.0
         block_gap = 20.0  # vertical gap between stacked blocks
-        column_gap = 12.0
-        SINGLE_COL_MAX = 8
-        MAX_COLUMNS = 3
-        MULTI_COL_MAX = 24
-        MAX_VISIBLE = MAX_COLUMNS * 6  # 18
+        MAX_VISIBLE = 10
+        MAX_LEGEND_WIDTH = 300.0
 
         # Color bar block dimensions
         has_cb_title = bool(self._value_description or self._color_bar_title)
         has_cb_subtitle = bool(self._value_description and self._color_bar_title)
-        color_bar_width = 140.0
+        color_bar_width = 130.0  # 120px bar + ~10px tick overhang
         color_bar_height = 26.0
         if has_cb_title:
             color_bar_height += 16.0
@@ -1061,41 +1092,36 @@ class Heatmap:
                 n = len(entries)
                 title_w = len(legend["name"]) * char_width
 
-                # Compute column layout
-                if n <= SINGLE_COL_MAX:
+                # Compute column layout (matches legend_renderer.js thresholds)
+                if n <= 4:
                     num_cols = 1
                     rows_per_col = n
-                    visible = entries
                     truncated = False
-                elif n <= MULTI_COL_MAX:
-                    num_cols = min(MAX_COLUMNS, math.ceil(n / 8))
-                    rows_per_col = math.ceil(n / num_cols)
-                    visible = entries
+                elif n <= MAX_VISIBLE:
+                    num_cols = 2
+                    rows_per_col = math.ceil(n / 2)
                     truncated = False
                 else:
-                    num_cols = MAX_COLUMNS
-                    rows_per_col = 6
-                    visible = entries[:MAX_VISIBLE]
+                    num_cols = 2
+                    rows_per_col = 5
                     truncated = True
 
-                # Per-column widths
-                col_widths = []
-                for c in range(num_cols):
-                    start = c * rows_per_col
-                    end = min(start + rows_per_col, len(visible))
-                    max_label_len = max(
-                        (len(visible[k]["label"]) for k in range(start, end)),
-                        default=0,
-                    )
-                    col_widths.append(swatch_size + swatch_label_gap + max_label_len * char_width)
+                # Width: compute from actual label lengths, cap at MAX_LEGEND_WIDTH
+                max_label_len = max(
+                    (len(e["label"]) for e in entries), default=0,
+                )
+                col_content_w = swatch_size + swatch_label_gap + max_label_len * char_width
+                if num_cols == 1:
+                    block_w = max(title_w, col_content_w) + 10.0
+                else:
+                    column_gap_px = 12.0  # matches JS columnGap
+                    block_w = min(col_content_w * 2 + column_gap_px + 10.0, MAX_LEGEND_WIDTH)
 
-                entries_w = sum(col_widths) + column_gap * (num_cols - 1)
-                block_w = max(title_w, entries_w) + 10.0
                 block_h = title_height + rows_per_col * row_height + (14.0 if truncated else 0.0)
                 blocks.append((block_w, block_h))
 
         # Vertical stack: width is the widest block, height is all blocks stacked
-        total_width = max(bw for bw, bh in blocks)
+        total_width = min(max(bw for bw, bh in blocks), MAX_LEGEND_WIDTH)
         total_height = sum(bh for bw, bh in blocks) + block_gap * (len(blocks) - 1)
 
         return total_width, total_height

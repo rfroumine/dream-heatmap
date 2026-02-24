@@ -36,10 +36,7 @@ class LegendRenderer {
     var blockGap = 20;
     var columnGap = 12;
     var charWidth = 6.5;
-    var SINGLE_COL_MAX = 8;
-    var MAX_COLUMNS = 3;
-    var MULTI_COL_MAX = 24;
-    var MAX_VISIBLE = MAX_COLUMNS * 6;  // 18
+    var MAX_VISIBLE = 10;
     var fontFamily = '"Outfit", system-ui, -apple-system, sans-serif';
 
     var panelX = legendPanel.x;
@@ -73,35 +70,28 @@ class LegendRenderer {
         // Compute column layout
         var n = entries.length;
         var numCols, rowsPerCol, visibleEntries, overflowCount;
-        if (n <= SINGLE_COL_MAX) {
+        if (n <= 4) {
           numCols = 1;
           rowsPerCol = n;
           visibleEntries = entries;
           overflowCount = 0;
-        } else if (n <= MULTI_COL_MAX) {
-          numCols = Math.min(MAX_COLUMNS, Math.ceil(n / 8));
-          rowsPerCol = Math.ceil(n / numCols);
+        } else if (n <= MAX_VISIBLE) {
+          numCols = 2;
+          rowsPerCol = Math.ceil(n / 2);
           visibleEntries = entries;
           overflowCount = 0;
         } else {
-          numCols = MAX_COLUMNS;
-          rowsPerCol = 6;
+          numCols = 2;
+          rowsPerCol = 5;
           visibleEntries = entries.slice(0, MAX_VISIBLE);
           overflowCount = n - MAX_VISIBLE;
         }
 
-        // Compute per-column widths
-        var colWidths = [];
-        for (var c = 0; c < numCols; c++) {
-          var maxLabelW = 0;
-          var start = c * rowsPerCol;
-          var end = Math.min(start + rowsPerCol, visibleEntries.length);
-          for (var k = start; k < end; k++) {
-            var lw = visibleEntries[k].label.length * charWidth;
-            if (lw > maxLabelW) maxLabelW = lw;
-          }
-          colWidths.push(swatchSize + swatchLabelGap + maxLabelW);
-        }
+        // Equal-width columns
+        var colWidth = numCols === 1
+          ? legendPanel.width
+          : (legendPanel.width - columnGap) / 2;
+        var maxLabelPx = colWidth - swatchSize - swatchLabelGap;
 
         // Render entries in columns
         var colX = panelX;
@@ -122,19 +112,36 @@ class LegendRenderer {
             rect.setAttribute("rx", "2");
             this._group.appendChild(rect);
 
-            // Label
-            var label = document.createElementNS(ns, "text");
-            label.textContent = entry.label;
-            label.setAttribute("x", colX + swatchSize + swatchLabelGap);
-            label.setAttribute("y", entryY + swatchSize * 0.8);
-            label.setAttribute("font-size", "10");
-            label.setAttribute("font-family", fontFamily);
-            label.setAttribute("fill", "#475569");
-            this._group.appendChild(label);
+            // Label with ellipsis truncation
+            var displayLabel = entry.label;
+            var maxChars = Math.floor(maxLabelPx / charWidth);
+            var needsTruncation = entry.label.length > maxChars;
+            if (needsTruncation && maxChars > 1) {
+              displayLabel = entry.label.slice(0, maxChars - 1) + "\u2026";
+            }
+
+            var labelEl = document.createElementNS(ns, "text");
+            labelEl.textContent = displayLabel;
+            labelEl.setAttribute("x", colX + swatchSize + swatchLabelGap);
+            labelEl.setAttribute("y", entryY + swatchSize * 0.8);
+            labelEl.setAttribute("font-size", "10");
+            labelEl.setAttribute("font-family", fontFamily);
+            labelEl.setAttribute("fill", "#475569");
+
+            // Add tooltip with full label on hover
+            if (needsTruncation) {
+              var titleEl = document.createElementNS(ns, "title");
+              titleEl.textContent = entry.label;
+              labelEl.appendChild(titleEl);
+              labelEl.style.pointerEvents = "auto";
+              labelEl.style.cursor = "default";
+            }
+
+            this._group.appendChild(labelEl);
 
             entryY += rowHeight;
           }
-          colX += colWidths[c] + columnGap;
+          colX += colWidth + columnGap;
         }
 
         // "+N more" overflow text

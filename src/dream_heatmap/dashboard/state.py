@@ -61,6 +61,10 @@ class DashboardState(param.Parameterized):
     show_row_dendro = param.Boolean(default=True)
     show_col_dendro = param.Boolean(default=True)
 
+    # --- Dendrogram side ---
+    row_dendro_side = param.String(default="left")
+    col_dendro_side = param.String(default="top")
+
     # --- Annotations (list of config dicts) ---
     annotations = param.List(default=[])
 
@@ -156,6 +160,7 @@ class DashboardState(param.Parameterized):
         "row_labels", "col_labels",
         "row_label_side", "col_label_side",
         "show_row_dendro", "show_col_dendro",
+        "row_dendro_side", "col_dendro_side",
         "annotations",
         "title", "value_description",
         watch=True,
@@ -313,6 +318,10 @@ class DashboardState(param.Parameterized):
             # Dendrogram visibility flags
             hm._show_row_dendro = self.show_row_dendro
             hm._show_col_dendro = self.show_col_dendro
+
+            # Dendrogram side placement
+            hm._row_dendro_side = self.row_dendro_side
+            hm._col_dendro_side = self.col_dendro_side
 
             # Compute layout and push to pane
             hm._compute_layout()
@@ -522,6 +531,9 @@ class DashboardState(param.Parameterized):
                 bottom_label_height=bottom_lbl_h,
                 row_gap_sizes=zoomed_row_gap_sizes,
                 col_gap_sizes=zoomed_col_gap_sizes,
+                title_height=28.0 if hm._title else 0.0,
+                row_dendro_side=hm._row_dendro_side,
+                col_dendro_side=hm._col_dendro_side,
             )
 
             # Rebuild annotations and labels for zoomed mappers

@@ -115,28 +115,26 @@ class TestEstimateLegendDimensions:
         assert w > 0
         assert h > 0
 
-    def test_single_column_boundary_8(self, matrix_df):
-        """Exactly 8 categories stays single-column."""
-        import math
-        cats = [f"cat{i}" for i in range(8)]
-        row_idx = [f"g{i}" for i in range(8)]
-        data = np.ones((8, 2))
+    def test_single_column_boundary_4(self, matrix_df):
+        """Exactly 4 categories stays single-column."""
+        cats = [f"cat{i}" for i in range(4)]
+        row_idx = [f"g{i}" for i in range(4)]
+        data = np.ones((4, 2))
         df = pd.DataFrame(data, index=row_idx, columns=["s1", "s2"])
         series = pd.Series(cats, index=row_idx)
         hm = Heatmap(df)
         hm.add_annotation("left", CategoricalAnnotation("Type", series))
         w, h = hm._estimate_legend_dimensions()
-        # Single column: height = color_bar + gap + title + 8 rows
+        # Single column: height = color_bar + gap + title + 4 rows
         color_bar_h = 26.0
         block_gap = 20.0
         title_height = 18.0
         row_height = 16.0
-        expected_h = color_bar_h + block_gap + title_height + 8 * row_height
+        expected_h = color_bar_h + block_gap + title_height + 4 * row_height
         assert h == expected_h
 
-    def test_multicolumn_9_entries(self, matrix_df):
-        """9 categories → 2 columns, ceil(9/2) = 5 rows per column."""
-        import math
+    def test_two_columns_9_entries(self, matrix_df):
+        """9 categories → 2 columns, ceil(9/2)=5 rows, no truncation."""
         cats = [f"cat{i}" for i in range(9)]
         row_idx = [f"g{i}" for i in range(9)]
         data = np.ones((9, 2))
@@ -149,14 +147,13 @@ class TestEstimateLegendDimensions:
         block_gap = 20.0
         title_height = 18.0
         row_height = 16.0
-        rows_per_col = math.ceil(9 / 2)  # 5
-        legend_h = title_height + rows_per_col * row_height
+        # 2 columns, ceil(9/2)=5 rows, no truncation
+        legend_h = title_height + 5 * row_height
         expected_h = color_bar_h + block_gap + legend_h
         assert h == expected_h
 
-    def test_multicolumn_17_entries(self, matrix_df):
-        """17 categories → 3 columns, ceil(17/3) = 6 rows per column."""
-        import math
+    def test_truncated_17_entries(self, matrix_df):
+        """17 categories → 2 columns, 5 rows, truncated, +7 more."""
         cats = [f"cat{i}" for i in range(17)]
         row_idx = [f"g{i}" for i in range(17)]
         data = np.ones((17, 2))
@@ -169,13 +166,14 @@ class TestEstimateLegendDimensions:
         block_gap = 20.0
         title_height = 18.0
         row_height = 16.0
-        rows_per_col = math.ceil(17 / 3)  # 6
-        legend_h = title_height + rows_per_col * row_height
+        truncation_extra = 14.0
+        # 2 columns, 5 rows per column, truncated
+        legend_h = title_height + 5 * row_height + truncation_extra
         expected_h = color_bar_h + block_gap + legend_h
         assert h == expected_h
 
     def test_truncation_30_entries(self, matrix_df):
-        """30 categories → 3 cols × 6 rows, 18 visible, +12 more, 14px extra."""
+        """30 categories → 2 columns, 5 rows, +20 more, 14px extra."""
         cats = [f"cat{i}" for i in range(30)]
         row_idx = [f"g{i}" for i in range(30)]
         data = np.ones((30, 2))
@@ -188,9 +186,9 @@ class TestEstimateLegendDimensions:
         block_gap = 20.0
         title_height = 18.0
         row_height = 16.0
-        rows_per_col = 6
         truncation_extra = 14.0
-        legend_h = title_height + rows_per_col * row_height + truncation_extra
+        # 2 columns, 5 rows per column, truncated
+        legend_h = title_height + 5 * row_height + truncation_extra
         expected_h = color_bar_h + block_gap + legend_h
         assert h == expected_h
 

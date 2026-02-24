@@ -302,27 +302,41 @@ class SVGOverlay {
     for (const link of spec.links) {
       let path;
       if (axis === "row") {
-        // Row dendrogram: drawn to the left of the heatmap
-        // leaf axis = vertical (y), height axis = horizontal (x, growing left)
-        const dendroRight = heatmap.x;  // right edge of dendro area
         const y1 = link.leafLeft;
         const y2 = link.leafRight;
-        const xMerge = dendroRight - link.heightMerge;
-        const xLeft = dendroRight - link.heightLeftChild;
-        const xRight = dendroRight - link.heightRightChild;
-
-        path = this._createUPath(xLeft, y1, xMerge, xRight, y2, "horizontal");
+        if (spec.side === "right") {
+          // Row dendrogram on the right: anchor at heatmap right edge, grow rightward
+          const dendroLeft = heatmap.x + heatmap.width;
+          const xMerge = dendroLeft + link.heightMerge;
+          const xLeft = dendroLeft + link.heightLeftChild;
+          const xRight = dendroLeft + link.heightRightChild;
+          path = this._createUPath(xLeft, y1, xMerge, xRight, y2, "horizontal");
+        } else {
+          // Row dendrogram on the left (default): grow leftward from heatmap
+          const dendroRight = heatmap.x;
+          const xMerge = dendroRight - link.heightMerge;
+          const xLeft = dendroRight - link.heightLeftChild;
+          const xRight = dendroRight - link.heightRightChild;
+          path = this._createUPath(xLeft, y1, xMerge, xRight, y2, "horizontal");
+        }
       } else {
-        // Col dendrogram: drawn above the heatmap
-        // leaf axis = horizontal (x), height axis = vertical (y, growing up)
-        const dendroBottom = heatmap.y;  // bottom edge of dendro area
         const x1 = link.leafLeft;
         const x2 = link.leafRight;
-        const yMerge = dendroBottom - link.heightMerge;
-        const yLeft = dendroBottom - link.heightLeftChild;
-        const yRight = dendroBottom - link.heightRightChild;
-
-        path = this._createUPath(x1, yLeft, yMerge, x2, yRight, "vertical");
+        if (spec.side === "bottom") {
+          // Col dendrogram below the heatmap: anchor at heatmap bottom, grow downward
+          const dendroTop = heatmap.y + heatmap.height;
+          const yMerge = dendroTop + link.heightMerge;
+          const yLeft = dendroTop + link.heightLeftChild;
+          const yRight = dendroTop + link.heightRightChild;
+          path = this._createUPath(x1, yLeft, yMerge, x2, yRight, "vertical");
+        } else {
+          // Col dendrogram above the heatmap (default): grow upward
+          const dendroBottom = heatmap.y;
+          const yMerge = dendroBottom - link.heightMerge;
+          const yLeft = dendroBottom - link.heightLeftChild;
+          const yRight = dendroBottom - link.heightRightChild;
+          path = this._createUPath(x1, yLeft, yMerge, x2, yRight, "vertical");
+        }
       }
 
       // Style
@@ -1216,7 +1230,7 @@ class SVGOverlay {
     }
     this._titleGroup = null;
 
-    if (!title || !layout || !layout.titleY) return;
+    if (!title || !layout || layout.titleY == null) return;
 
     var ns = "http://www.w3.org/2000/svg";
     this._titleGroup = document.createElementNS(ns, "g");

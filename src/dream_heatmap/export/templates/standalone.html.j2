@@ -81,7 +81,7 @@ function extractSubMatrix(matrix, origNCols, rowStart, rowEnd, colStart, colEnd)
  */
 function buildZoomedLayout(origLayout, nRows, nCols, cellSize) {
   var padding = 40;
-  var titleOffset = origLayout.titleY ? 28 : 0;
+  var titleOffset = origLayout.titleY != null ? 28 : 0;
   var heatmapX = padding;
   var heatmapY = padding + titleOffset;
   var heatmapW = nCols * cellSize;
@@ -108,7 +108,7 @@ function buildZoomedLayout(origLayout, nRows, nCols, cellSize) {
     rightAnnotationWidth: 0,
     bottomAnnotationHeight: 0,
   };
-  if (origLayout.titleY) {
+  if (origLayout.titleY != null) {
     result.titleY = padding + 28 * 0.7;
   }
   return result;
