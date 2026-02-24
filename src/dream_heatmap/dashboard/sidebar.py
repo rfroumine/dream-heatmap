@@ -215,32 +215,33 @@ class SidebarControls:
             step=0.1, sizing_mode="stretch_width",
         )
 
-        # --- Per-axis scaling (single method, pick axis) ---
-        _scale_options = {
-            "None": "none",
+        # --- Per-axis scaling (pick axis first, then method) ---
+        # Derive initial values from state
+        if s.row_scale_method != "none":
+            _init_axis = "Rows"
+            _init_method = s.row_scale_method
+        elif s.col_scale_method != "none":
+            _init_axis = "Columns"
+            _init_method = s.col_scale_method
+        else:
+            _init_axis = "none"
+            _init_method = "zscore"  # default when an axis is chosen
+
+        self.scale_axis_select = pn.widgets.Select(
+            name="Scale axis", value=_init_axis,
+            options={"None": "none", "Row-wise": "Rows", "Column-wise": "Columns"},
+            sizing_mode="stretch_width",
+        )
+
+        _scale_method_options = {
             "Center & Scale (z-score)": "zscore",
             "Center only": "center",
             "Min-Max [0,1]": "minmax",
         }
-        # Derive initial values from state
-        if s.row_scale_method != "none":
-            _init_method = s.row_scale_method
-            _init_axis = "Rows"
-        elif s.col_scale_method != "none":
-            _init_method = s.col_scale_method
-            _init_axis = "Columns"
-        else:
-            _init_method = "none"
-            _init_axis = "Rows"
-
         self.scale_method_select = pn.widgets.Select(
             name="Scale method", value=_init_method,
-            options=_scale_options, sizing_mode="stretch_width",
-        )
-        self.scale_axis_select = pn.widgets.Select(
-            name="Apply", value=_init_axis,
-            options={"Row-wise": "Rows", "Column-wise": "Columns"},
-            visible=(_init_method != "none"),
+            options=_scale_method_options,
+            visible=(_init_axis != "none"),
             sizing_mode="stretch_width",
         )
 
@@ -541,13 +542,13 @@ class SidebarControls:
 
     def _on_scaling_changed(self, event) -> None:
         """Handle per-axis scaling change -- single batched rebuild."""
-        method = self.scale_method_select.value
         axis = self.scale_axis_select.value
+        method = self.scale_method_select.value
 
-        # Show/hide axis toggle based on whether a method is selected
-        self.scale_axis_select.visible = (method != "none")
+        # Show/hide method selector based on whether an axis is selected
+        self.scale_method_select.visible = (axis != "none")
 
-        if method == "none":
+        if axis == "none":
             row_method, col_method = "none", "none"
         elif axis == "Rows":
             row_method, col_method = method, "none"
@@ -594,9 +595,9 @@ class SidebarControls:
 
     def _update_color_range_for_scaling(self) -> None:
         """Set vmin/vmax widgets from current state. Used at init before watches exist."""
-        method = self.scale_method_select.value
         axis = self.scale_axis_select.value
-        if method == "none":
+        method = self.scale_method_select.value
+        if axis == "none":
             row_m, col_m = "none", "none"
         elif axis == "Rows":
             row_m, col_m = method, "none"
@@ -1153,8 +1154,8 @@ class SidebarControls:
 
             _make_section_card("Scale & Colour", pn.Column(
                 self.value_description_input,
-                self.scale_method_select,
                 self.scale_axis_select,
+                self.scale_method_select,
                 self.colormap_select,
                 pn.Row(self.vmin_input, self.vmax_input, sizing_mode="stretch_width"),
                 sizing_mode="stretch_width",
