@@ -146,15 +146,34 @@ body, .mdc-typography {
   color: #202223 !important;
 }
 
-/* ---- Hide header bar entirely ---- */
+/* ---- Compact top app bar (48px) ---- */
 .mdc-top-app-bar {
-  display: none !important;
+  background: #ffffff !important;
+  color: #1a1a2e !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid #e1e3e5 !important;
+}
+.mdc-top-app-bar__row {
+  height: 48px !important;
+  min-height: 48px !important;
+}
+.mdc-top-app-bar .title {
+  font-family: "Outfit", system-ui, -apple-system, sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #202223 !important;
+}
+.mdc-top-app-bar__navigation-icon {
+  color: #637381 !important;
+}
+.mdc-top-app-bar__navigation-icon:hover {
+  color: #202223 !important;
 }
 .mdc-top-app-bar--fixed-adjust {
-  padding-top: 0 !important;
+  padding-top: 48px !important;
 }
-.mdc-drawer {
-  top: 0 !important;
+.main-content {
+  height: calc(100vh - 68px) !important;
 }
 
 /* ---- Loading spinner: more visible ---- */
@@ -173,6 +192,14 @@ body, .mdc-typography {
 #sidebar .mdc-drawer__content { background: #ffffff !important; }
 #sidebar .bk-input-group {
   margin-bottom: 4px !important;
+}
+
+/* Smooth MDC drawer transitions */
+#sidebar.mdc-drawer--dismissible {
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1) !important;
+}
+.mdc-drawer-app-content {
+  transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1) !important;
 }
 
 /* ---- Main content area ---- */
@@ -280,8 +307,25 @@ class DashboardApp:
             sizing_mode="stretch_width",
         )
 
-        # Main content: full-width heatmap + attribution + bottom chart grid
+        # Dispatch resize after MDC drawer toggle so heatmap re-renders.
+        resize_on_toggle = pn.pane.HTML(
+            '<script>(function(){'
+            '  var s=document.getElementById("sidebar");'
+            '  if(!s)return;'
+            '  new MutationObserver(function(m){'
+            '    for(var i=0;i<m.length;i++){'
+            '      if(m[i].attributeName==="class"){'
+            '        setTimeout(function(){window.dispatchEvent(new Event("resize"));},300);'
+            '      }'
+            '    }'
+            '  }).observe(s,{attributes:true,attributeFilter:["class"]});'
+            '})();</script>',
+            height=0, margin=0, sizing_mode="fixed",
+        )
+
+        # Main content: resize watcher + full-width heatmap + attribution + bottom chart grid
         main_content = pn.Column(
+            resize_on_toggle,
             self.heatmap_pane,
             attribution,
             self._bottom_chart_grid,

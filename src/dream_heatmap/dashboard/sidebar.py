@@ -136,6 +136,33 @@ def _make_section_card(
 # Helper functions
 # ---------------------------------------------------------------------------
 
+def _estimate_cluster_seconds(group_sizes: list[int], n_features: int) -> float:
+    """Rough estimate of scipy hierarchical clustering time (seconds).
+
+    Sums per-group: pdist O(n^2*m) + linkage O(n^2.7) with optimal_ordering.
+    Coefficients are conservative (better to over-estimate).
+    """
+    total = 0.0
+    for n in group_sizes:
+        if n < 2:
+            continue
+        t_pdist = n * n * n_features * 1e-8
+        t_linkage = (n / 1000) ** 2.7 * 2.0
+        total += t_pdist + t_linkage
+    return total
+
+
+def _format_time(seconds: float) -> str:
+    """Human-friendly time estimate, rounded to nearest 5 seconds."""
+    if seconds < 60:
+        rounded = max(5, round(seconds / 5) * 5)
+        return f"~{rounded} seconds"
+    minutes = seconds / 60
+    if minutes < 2:
+        return "~1 minute"
+    return f"~{int(round(minutes))} minutes"
+
+
 def _build_grouping_options(meta_cols: list[str]) -> dict[str, str]:
     """Build options for a grouping dropdown: None + metadata columns."""
     opts = {"None": ""}
@@ -410,6 +437,40 @@ class SidebarControls:
         # --- Status text ---
         self.status_text = pn.pane.Markdown(
             "", styles={"color": "#6b7280", "font-size": "11px", "font-style": "italic"},
+            sizing_mode="stretch_width",
+        )
+
+        # --- Clustering confirmation warnings (one per axis) ---
+        self._pending_row_cluster_mode: str = "none"
+        self._pending_col_cluster_mode: str = "none"
+
+        row_proceed_btn = pn.widgets.Button(
+            name="Proceed", button_type="primary", width=80, height=28,
+        )
+        row_cancel_btn = pn.widgets.Button(
+            name="Cancel", button_type="light", width=80, height=28,
+        )
+        row_proceed_btn.on_click(lambda e: self._confirm_cluster("row"))
+        row_cancel_btn.on_click(lambda e: self._cancel_cluster("row"))
+        self._row_cluster_warning = pn.Column(
+            pn.pane.Alert("", alert_type="warning", margin=(4, 0)),
+            pn.Row(row_proceed_btn, row_cancel_btn),
+            visible=False,
+            sizing_mode="stretch_width",
+        )
+
+        col_proceed_btn = pn.widgets.Button(
+            name="Proceed", button_type="primary", width=80, height=28,
+        )
+        col_cancel_btn = pn.widgets.Button(
+            name="Cancel", button_type="light", width=80, height=28,
+        )
+        col_proceed_btn.on_click(lambda e: self._confirm_cluster("col"))
+        col_cancel_btn.on_click(lambda e: self._cancel_cluster("col"))
+        self._col_cluster_warning = pn.Column(
+            pn.pane.Alert("", alert_type="warning", margin=(4, 0)),
+            pn.Row(col_proceed_btn, col_cancel_btn),
+            visible=False,
             sizing_mode="stretch_width",
         )
 
@@ -803,6 +864,21 @@ class SidebarControls:
         self.row_cluster_metric_select.visible = is_clustering
         self.show_row_dendro_toggle.visible = is_clustering
         self.row_dendro_side_select.visible = is_clustering and self.show_row_dendro_toggle.value
+
+        if is_clustering:
+            n_features = self.state.data.shape[1]
+            group_sizes = self._get_group_sizes("row")
+            est = _estimate_cluster_seconds(group_sizes, n_features)
+            if est > 10 and not self._is_cluster_cached("row", mode):
+                self._row_cluster_warning[0].object = (
+                    f"Clustering may take {_format_time(est)}. "
+                    f"This is a one-time cost \u2014 results are cached for the session."
+                )
+                self._row_cluster_warning.visible = True
+                self._pending_row_cluster_mode = mode
+                return  # Don't propagate to state yet
+
+        self._row_cluster_warning.visible = False
         self._set_state("row_cluster_mode", mode)
 
     def _on_col_cluster_mode_changed(self, event) -> None:
@@ -814,6 +890,21 @@ class SidebarControls:
         self.col_cluster_metric_select.visible = is_clustering
         self.show_col_dendro_toggle.visible = is_clustering
         self.col_dendro_side_select.visible = is_clustering and self.show_col_dendro_toggle.value
+
+        if is_clustering:
+            n_features = self.state.data.shape[0]
+            group_sizes = self._get_group_sizes("col")
+            est = _estimate_cluster_seconds(group_sizes, n_features)
+            if est > 10 and not self._is_cluster_cached("col", mode):
+                self._col_cluster_warning[0].object = (
+                    f"Clustering may take {_format_time(est)}. "
+                    f"This is a one-time cost \u2014 results are cached for the session."
+                )
+                self._col_cluster_warning.visible = True
+                self._pending_col_cluster_mode = mode
+                return  # Don't propagate to state yet
+
+        self._col_cluster_warning.visible = False
         self._set_state("col_cluster_mode", mode)
 
     def _on_cluster_param_changed(self, param_name: str, value: str) -> None:
@@ -832,6 +923,63 @@ class SidebarControls:
         finally:
             self._syncing = False
         self._set_state(param_name, value)
+
+    # --- Clustering estimation & confirmation ---
+
+    def _get_group_sizes(self, axis: str) -> list[int]:
+        """Compute group sizes from data + current grouping."""
+        s = self.state
+        if axis == "row":
+            group_by, metadata = s.row_group_by, s.row_metadata
+            n_total = s.data.shape[0]
+        else:
+            group_by, metadata = s.col_group_by, s.col_metadata
+            n_total = s.data.shape[1]
+        if not group_by or metadata is None:
+            return [n_total]
+        return metadata.groupby(list(group_by)).size().tolist()
+
+    def _is_cluster_cached(self, axis: str, mode: str) -> bool:
+        """Check if this exact clustering config is already cached."""
+        s = self.state
+        if axis == "row":
+            key = (tuple(s.row_group_by), mode, s.cluster_method,
+                   s.cluster_metric, s.row_scale_method, s.col_scale_method)
+            return key in s._row_cluster_cache
+        else:
+            key = (tuple(s.col_group_by), mode, s.cluster_method,
+                   s.cluster_metric, s.row_scale_method, s.col_scale_method)
+            return key in s._col_cluster_cache
+
+    def _confirm_cluster(self, axis: str) -> None:
+        """User clicked Proceed — hide warning and propagate the pending cluster mode."""
+        if axis == "row":
+            self._row_cluster_warning.visible = False
+            self._set_state("row_cluster_mode", self._pending_row_cluster_mode)
+        else:
+            self._col_cluster_warning.visible = False
+            self._set_state("col_cluster_mode", self._pending_col_cluster_mode)
+
+    def _cancel_cluster(self, axis: str) -> None:
+        """User clicked Cancel — hide warning, reset radio to 'none'."""
+        self._syncing = True
+        try:
+            if axis == "row":
+                self._row_cluster_warning.visible = False
+                self.row_cluster_mode.value = "none"
+                self.row_cluster_method_select.visible = False
+                self.row_cluster_metric_select.visible = False
+                self.show_row_dendro_toggle.visible = False
+                self.row_dendro_side_select.visible = False
+            else:
+                self._col_cluster_warning.visible = False
+                self.col_cluster_mode.value = "none"
+                self.col_cluster_method_select.visible = False
+                self.col_cluster_metric_select.visible = False
+                self.show_col_dendro_toggle.visible = False
+                self.col_dendro_side_select.visible = False
+        finally:
+            self._syncing = False
 
     # --- Annotation helpers ---
 
@@ -1094,13 +1242,8 @@ class SidebarControls:
 
     def build_panel(self) -> pn.Column:
         """Build the complete sidebar panel."""
-        branding = pn.pane.Markdown(
-            "**dream-heatmap**",
-            styles={"font-size": "15px", "color": "#202223", "white-space": "nowrap"},
-            margin=(0, 0, 0, 0),
-        )
         header_row = pn.Row(
-            branding, self.status_text,
+            self.status_text,
             sizing_mode="stretch_width",
             margin=(0, 0, 8, 0),
         )
@@ -1120,6 +1263,7 @@ class SidebarControls:
             self.row_group_secondary,
             _step_label(2, "Cluster"),
             self.row_cluster_mode,
+            self._row_cluster_warning,
             self.row_cluster_method_select,
             self.row_cluster_metric_select,
             self.show_row_dendro_toggle,
@@ -1133,6 +1277,7 @@ class SidebarControls:
             self.col_group_secondary,
             _step_label(2, "Cluster"),
             self.col_cluster_mode,
+            self._col_cluster_warning,
             self.col_cluster_method_select,
             self.col_cluster_metric_select,
             self.show_col_dendro_toggle,
@@ -1150,7 +1295,6 @@ class SidebarControls:
 
         return pn.Column(
             header_row,
-            self.title_input,
 
             _make_section_card("Scale & Colour", pn.Column(
                 self.value_description_input,
@@ -1162,6 +1306,7 @@ class SidebarControls:
             ), "color", collapsed=False),
 
             _make_section_card("Labels", pn.Column(
+                self.title_input,
                 pn.Row(self.row_labels_select, self.row_label_side_select, sizing_mode="stretch_width"),
                 pn.Row(self.col_labels_select, self.col_label_side_select, sizing_mode="stretch_width"),
                 sizing_mode="stretch_width",
