@@ -1296,6 +1296,13 @@ class SidebarControls:
         return pn.Column(
             header_row,
 
+            _make_section_card("Labels", pn.Column(
+                self.title_input,
+                pn.Row(self.row_labels_select, self.row_label_side_select, sizing_mode="stretch_width"),
+                pn.Row(self.col_labels_select, self.col_label_side_select, sizing_mode="stretch_width"),
+                sizing_mode="stretch_width",
+            ), "labels", collapsed=False),
+
             _make_section_card("Scale & Colour", pn.Column(
                 self.value_description_input,
                 self.scale_axis_select,
@@ -1303,19 +1310,12 @@ class SidebarControls:
                 self.colormap_select,
                 pn.Row(self.vmin_input, self.vmax_input, sizing_mode="stretch_width"),
                 sizing_mode="stretch_width",
-            ), "color", collapsed=False),
-
-            _make_section_card("Labels", pn.Column(
-                self.title_input,
-                pn.Row(self.row_labels_select, self.row_label_side_select, sizing_mode="stretch_width"),
-                pn.Row(self.col_labels_select, self.col_label_side_select, sizing_mode="stretch_width"),
-                sizing_mode="stretch_width",
-            ), "labels"),
+            ), "color"),
 
             _make_section_card("Group, Order & Cluster", pn.Column(
                 grouping_tabs,
                 sizing_mode="stretch_width",
-            ), "ordering", collapsed=False),
+            ), "ordering"),
 
             _make_section_card("Annotations & Splits", pn.Column(
                 self.ann_axis_select,
